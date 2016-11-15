@@ -1,7 +1,7 @@
 // ros
-#include <ros/ros.h>
-#include <ros/subscriber.h>
-#include <sensor_msgs/Image.h>
+// #include <ros/ros.h>
+// #include <ros/subscriber.h>
+// #include <sensor_msgs/Image.h>
 
 // cv3
 // #include <opencv3/highgui/highgui.hpp>
@@ -58,10 +58,22 @@ class CropRowDetector{
         int area () {return 1;}
         // CropRowDetector(std::map<std::string, double>);
         void setup();
+        cv::Mat detect(cv::Mat& intensity_map, cv::Mat& temp);
 };
 
 CropRowDetector::CropRowDetector (int a) {
     std::cout << "initd" << a << std::endl;
+}
+
+cv::Mat CropRowDetector::detect(cv::Mat& intensity, cv::Mat& templ){
+    // Mat templ; // from settings
+    cv::Mat result;
+    int result_rows = intensity.rows - templ.rows;
+    int result_cols = intensity.cols - templ.cols;
+    result.create(result_rows, result_cols, CV_8UC1);
+    cv::matchTemplate(intensity, templ, result, CV_TM_CCORR);
+    // normalize?
+    return result;
 }
 
 void CropRowDetector::setup(){
@@ -120,14 +132,34 @@ int main(int argc, char** argv){
     ImagePreprocessor preprocessor (argv[1], cv::Size(100,100));
     std::cout << "process" << std::endl;
     std::vector<cv::Mat> data = preprocessor.process();
-    for (cv::Mat& pImage : data) {
-        std::cout << "imshow" << std::endl;
-        display_img(pImage);
-        // row_detector.detect(intensity_map);
+    //TODO test results against paper-generated
+    CropRowDetector row_detector (42);
+    // za from 0 to a/2
+    // 0 from a/2 to (0.5 - b/2)
+    // -za from (0.5 - b/2) to (0.5 + b/2)
+    // 0 from (0.5 + b/2) to 1-a/2
+    // +za from 1-a/2 to 1
+    cv::Mat templ = cv::Mat::zeros(1, data[0].cols, CV_8UC1);
+
+    int a = 10;
+    int b = 20;
+    int za = 1;
+    int zb = -1;
+    for(int y=0; y<50; y+=1){
+        if(y <= a/2 || y >= 1-a/2)
+        {
+            templ.at<uchar>(1, y) = za;
+        }
+        else if( (1-b)/2 <= y && y <= (1+b)/2 ){
+            templ.at<uchar>(1, y) = -zb;
+        }
     }
 
-    // CropRowDetector row_detector (alfa, beta, gamma);
-    CropRowDetector crd (42);
+    for (cv::Mat& pIntensityImg : data) {
+        std::cout << "imshow" << std::endl;
+        display_img(pIntensityImg);
+        row_detector.detect(pIntensityImg, templ);
+    }
 
     // ros::spin();
     //  cv::ExGImage(small_image, intensity_map);
