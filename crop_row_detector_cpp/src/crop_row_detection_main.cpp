@@ -82,7 +82,7 @@ cv::Mat CropRowDetector::detect(cv::Mat& intensity, cv::Mat& templ){
 
     cv::Ptr<cv::plot::Plot2d> plot;
     cv::Mat plot_result;
-    for (int i=intensity.rows - 1; i >= 0 ; i--) {
+    for (int i=intensity.rows - 1; i >= intensity.rows / 2 ; i--) {
         // std::cout << "displaying row: " << i << std::endl;
         intensity.row(i).convertTo(plot_image, CV_64F);
         /*
