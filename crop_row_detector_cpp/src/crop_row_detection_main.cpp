@@ -7,6 +7,7 @@
 // #include <opencv3/highgui/highgui.hpp>
 // #include <opencv3/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include <opencv2/plot.hpp>
 
 // #include <eigen/core>
 #include <iostream>
@@ -41,24 +42,25 @@ std::vector<cv::Mat> ImagePreprocessor::process(){
     std::cout << "resizing images to " << m_size  << std::endl;
     for (std::string file_path : file_names)
     {
+        std::cout << "loading " << file_path  << std::endl;
         cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
         // if (im.empty()) continue; //only proceed if
         cv::Mat small_image;
         cv::resize(image, small_image, m_size); // settings["image_size"]);
-        cv::Mat intensity_map = ImagePreprocessor::convertToExG(image);
-        images.push_back(intensity_map);
+        cv::Mat intensity = ImagePreprocessor::convertToExG(image);
+        images.push_back(intensity);
     }
     return images;
 }
 
 class CropRowDetector{
-        // int width;
+    // int width;
     public:
         CropRowDetector (int);
         int area () {return 1;}
         // CropRowDetector(std::map<std::string, double>);
         void setup();
-        cv::Mat detect(cv::Mat& intensity_map, cv::Mat& temp);
+        cv::Mat detect(cv::Mat& intensity, cv::Mat& temp);
 };
 
 CropRowDetector::CropRowDetector (int a) {
@@ -71,7 +73,35 @@ cv::Mat CropRowDetector::detect(cv::Mat& intensity, cv::Mat& templ){
     int result_rows = intensity.rows - templ.rows;
     int result_cols = intensity.cols - templ.cols;
     result.create(result_rows, result_cols, CV_8UC1);
-    cv::matchTemplate(intensity, templ, result, CV_TM_CCORR);
+
+    cv::Mat average_intensity;
+    average_intensity.create(1, intensity .cols, CV_64F);
+
+    cv::Mat plot_image;
+    plot_image.create(1, intensity.cols, CV_64F);
+
+    cv::Ptr<cv::plot::Plot2d> plot;
+    cv::Mat plot_result;
+    for (int i=intensity.rows - 1; i >= 0 ; i--) {
+        // std::cout << "displaying row: " << i << std::endl;
+        intensity.row(i).convertTo(plot_image, CV_64F);
+        /*
+        plot = cv::plot::createPlot2d(plot_image);
+        plot->render(plot_result);
+        cv::imshow("row intensity", plot_result);
+        cv::waitKey(1);
+        */
+        // std::cout << "going to sum " << cv::Size(average_intensity);
+        // std::cout << " and " << cv::Size(plot_image) << std::endl;
+        average_intensity += (plot_image / intensity.rows);
+    }
+    // average_intensity =/ intensity.rows;
+    std::cout << "displaying avg" << std::endl;
+    plot = cv::plot::createPlot2d(average_intensity);
+    plot->render(plot_result);
+    cv::imshow("row intensity", plot_result);
+    cv::waitKey(0);
+    // cv::matchTemplate(intensity, templ, result, CV_TM_CCORR);
     // normalize?
     return result;
 }
@@ -96,21 +126,21 @@ void CropRowDetector::setup(){
     std::cout << "setted up" << std::endl;
 }
 
-    /*
-     * FLOW:
-     *  preprocess img
-     *  - downsample
-     *  - exg
-     *  discretization
-     *  - binization
-     *  energy_eval
-     *  -
-     *  detector
-     *      -- last piece
-     *      -- postprocess smoothing
-     *  -
-     *  score
-     */
+/*
+ * FLOW:
+ *  preprocess img
+ *  - downsample
+ *  - exg
+ *  discretization
+ *  - binization
+ *  energy_eval
+ *  -
+ *  detector
+ *      -- last piece
+ *      -- postprocess smoothing
+ *  -
+ *  score
+ */
 void display_img(cv::Mat image){
     cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     cv::imshow("Display Image", image);
@@ -140,6 +170,7 @@ int main(int argc, char** argv){
     // 0 from (0.5 + b/2) to 1-a/2
     // +za from 1-a/2 to 1
     cv::Mat templ = cv::Mat::zeros(1, data[0].cols, CV_8UC1);
+    /*
 
     int a = 10;
     int b = 20;
@@ -155,6 +186,7 @@ int main(int argc, char** argv){
         }
     }
 
+    */
     for (cv::Mat& pIntensityImg : data) {
         std::cout << "imshow" << std::endl;
         display_img(pIntensityImg);
@@ -162,7 +194,7 @@ int main(int argc, char** argv){
     }
 
     // ros::spin();
-    //  cv::ExGImage(small_image, intensity_map);
+    //  cv::ExGImage(small_image, intensity);
     std::cout << "done" << std::endl;
     return 0;
 }
