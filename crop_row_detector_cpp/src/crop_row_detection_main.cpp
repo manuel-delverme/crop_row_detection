@@ -42,9 +42,7 @@ int main(int argc, char** argv){
     settings["a0"] = 1.28;
     settings["b0"] = 4.48;
 
-    std::cout << "initing preprocess" << std::endl;
     ImagePreprocessor preprocessor (argv[1], cv::Size(100,100));
-    std::cout << "process" << std::endl;
     std::vector<cv::Mat> data = preprocessor.process();
     //TODO test results against paper-generated
     CropRowDetector row_detector (42);
@@ -55,18 +53,39 @@ int main(int argc, char** argv){
     int n_octaves = 5;
     int window_width = 10; // out of my ass
 
+    cv::Mat temp_image;
+
     for (cv::Mat& pIntensityImg : data) {
         // std::cout << "imshow" << std::endl;
         // display_img(pIntensityImg);
         // row_detector.detect(pIntensityImg, temp
         // int center, // uc
         std::cout << "parsing picture" << std::endl;
-        std::vector<int> match_results = row_detector.template_matching(
+        std::vector<std::pair<int, int>> match_results = row_detector.template_matching(
                 pIntensityImg, d_min, n_samples_per_octave,
                 n_octaves, (int) settings["a0"], (int) settings["b0"],
                 window_width, // w
                 window_width / 2
         );
+        cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
+
+        int image_height = pIntensityImg.size[0];
+        int image_width = pIntensityImg.size[0];
+        std::pair<int, int> x;
+
+        for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
+            x = match_results.at((unsigned long) image_row_num);
+            int column = x.first;
+            int period = x.second;
+            std::cout << "best pair was: phase " << x.first << " freq: " << 1.0 / x.second << std::endl;
+            // TODO: phase and freq are wrong
+            do{
+                cv::Vec3b& pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
+                pPixel[2] = 255;
+                column += period;
+            } while(column <= image_width);
+        }
+        display_img(temp_image);
 
         // x_best = row_detector.find_optimal_x(f);
     }

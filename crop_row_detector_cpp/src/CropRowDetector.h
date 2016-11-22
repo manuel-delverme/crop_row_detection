@@ -28,11 +28,10 @@ class CropRowDetector{
 
 
 
-    std::vector<int> template_matching(
-                cv::Mat &Intensity,
-                int d_min, int n_samples_per_octave, int n_octaves,
-                int positive_pulse_width, int negative_pulse_width,
-                int window_width, int center_of_image_row
+    std::vector<std::pair<int, int>> template_matching(cv::Mat &Intensity,
+                                                       int d_min, int n_samples_per_octave, int n_octaves,
+                                                       int positive_pulse_width, int negative_pulse_width,
+                                                       int window_width, int center_of_image_row
         );
         // std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<int> f);
         int CrossCorrelation(

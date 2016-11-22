@@ -50,7 +50,10 @@ cv::Mat CropRowDetector::detect(cv::Mat& intensity, cv::Mat& templ){
     return result;
 }
 
-std::vector<int> CropRowDetector::template_matching(
+/*
+ * returns the best pair x for each row
+ * */
+std::vector<std::pair<int, int>> CropRowDetector::template_matching(
         cv::Mat& Intensity,
         int d_min,
         int n_samples_per_octave,
@@ -60,24 +63,26 @@ std::vector<int> CropRowDetector::template_matching(
         int window_width, // w
         int center_of_image_row // uc
 ) {
-    std::vector<int> f;
+    std::pair<int, int> best_pair;
     int image_height = Intensity.size[0];
     int period = 0;
     // int center = window_width / 2; TODO useme
     std::pair<int, int> x;
     int energy = 0;
+    std::vector<std::pair<int,int>> best_pairs;
 
     int n_frequencies = (n_samples_per_octave * n_octaves) + 1; // actually a period
     for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
         std::cout << "row: " << image_row_num << std::endl;
-        f.push_back(energy);
         cv::Mat intensity_row = Intensity.row(image_row_num);
+        int best_energy = 0;
         for (int k = 0; k < n_frequencies - 1; k++) {
             period = d_min * std::pow(2, k / n_samples_per_octave);
+            std::cout << "frequency: " << 1.0/period << std::endl;
+
             int half_band = (int) std::floor(0.5 * period);
             for (int phase = -half_band; phase < half_band; phase++) {
                 x = std::make_pair(phase, period);
-
                 energy = CrossCorrelation(
                         intensity_row,
                         x,
@@ -85,17 +90,21 @@ std::vector<int> CropRowDetector::template_matching(
                         window_width, center_of_image_row);
 
                 // std::cout << "phase: " << x.first << " period: " << x.second << " energy: " << energy << std::endl;
-                f.push_back(energy);
+                if(energy > best_energy){
+                    best_energy = energy;
+                    best_pair = x;
+                }
             }
         }
+        best_pairs.push_back(best_pair);
     }
-    return f;
+    return best_pairs;
 }
 int CropRowDetector::CrossCorrelation(cv::Mat I, std::pair<int, int> template_var_param,
                      int positive_pulse_width, int negative_pulse_width,
                      int image_width, int center_of_row){
     int phase = template_var_param.first;
-    int period = template_var_param.second; // period not period
+    int period = template_var_param.second;
     int positive_pulse_start, positive_pulse_end, negative_pulse_start, negative_pulse_end;
     int pulse_center = center_of_row + phase - (int)std::floor ((center_of_row + phase) / period ) * period;
     int positive_correlation_value = 0;
