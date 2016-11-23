@@ -58,8 +58,8 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
         int d_min,
         int n_samples_per_octave,
         int n_octaves,
-        int positive_pulse_width,
-        int negative_pulse_width,
+        double positive_pulse_width,
+        double negative_pulse_width,
         int window_width, // w
         int center_of_image_row // uc
 ) {
@@ -73,14 +73,14 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
 
     int n_frequencies = (n_samples_per_octave * n_octaves) + 1; // actually a period
     for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
-        std::cout << "row: " << image_row_num << std::endl;
+        //std::cout << "row: " << image_row_num << std::endl;
         cv::Mat intensity_row = Intensity.row(image_row_num);
         int best_energy = 0;
         for (int k = 0; k < n_frequencies - 1; k++) {
             period = d_min * std::pow(2, k / n_samples_per_octave);
-            std::cout << "frequency: " << 1.0/period << std::endl;
+            //std::cout << "frequency: " << 1.0/period << std::endl;
 
-            int half_band = (int) std::floor(0.5 * period);
+            int half_band = (int) std::round(0.5 * period);
             for (int phase = -half_band; phase < half_band; phase++) {
                 x = std::make_pair(phase, period);
                 energy = CrossCorrelation(
@@ -106,15 +106,15 @@ int CropRowDetector::CrossCorrelation(cv::Mat I, std::pair<int, int> template_va
     int phase = template_var_param.first;
     int period = template_var_param.second;
     int positive_pulse_start, positive_pulse_end, negative_pulse_start, negative_pulse_end;
-    int pulse_center = center_of_row + phase - (int)std::floor ((center_of_row + phase) / period ) * period;
+    int pulse_center = center_of_row + phase - (int)std::round ((center_of_row + phase) / period ) * period;
     int positive_correlation_value = 0;
     int negative_correlation_value = 0;
     int positive_pixels = 0;
     int negative_pixels = 0;
     do{
-        positive_pulse_start = pulse_center - positive_pulse_width/2;
+        positive_pulse_start = std::round(pulse_center - positive_pulse_width/2);
         positive_pulse_end = positive_pulse_start + positive_pulse_width;
-        negative_pulse_start = pulse_center + period/2 - negative_pulse_width/2;
+        negative_pulse_start = std::round(pulse_center + period/2 - negative_pulse_width/2);
         negative_pulse_end = negative_pulse_start + negative_pulse_width;
         positive_pulse_start = saturate(positive_pulse_start, 0, image_width);
         positive_pulse_end = saturate(positive_pulse_end, 0, image_width);

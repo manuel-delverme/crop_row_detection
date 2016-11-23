@@ -41,17 +41,19 @@ int main(int argc, char** argv){
     std::map<std::string, double> settings; // setup();
     settings["a0"] = 1.28;
     settings["b0"] = 4.48;
+    settings["width"] = 178;
+    settings["height"] = 178;
 
-    ImagePreprocessor preprocessor (argv[1], cv::Size(100,100));
+    ImagePreprocessor preprocessor (argv[1], cv::Size(settings["height"],settings["width"]));
     std::vector<cv::Mat> data = preprocessor.process();
     //TODO test results against paper-generated
-    CropRowDetector row_detector (42);
+    CropRowDetector row_detector (42);	
 
     // vvv this is from cfg file
     int d_min = 8;
     int n_samples_per_octave = 70;
     int n_octaves = 5;
-    int window_width = 10; // out of my ass
+    //int window_width = 10; // out of my ass
 
     cv::Mat temp_image;
 
@@ -63,21 +65,21 @@ int main(int argc, char** argv){
         std::cout << "parsing picture" << std::endl;
         std::vector<std::pair<int, int>> match_results = row_detector.template_matching(
                 pIntensityImg, d_min, n_samples_per_octave,
-                n_octaves, (int) settings["a0"], (int) settings["b0"],
-                window_width, // w
-                window_width / 2
+                n_octaves, settings["a0"], settings["b0"],
+                settings["width"], 
+                settings["width"] / 2
         );
         cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
 
         int image_height = pIntensityImg.size[0];
-        int image_width = pIntensityImg.size[0];
+        int image_width = pIntensityImg.size[1];
         std::pair<int, int> x;
 
         for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
             x = match_results.at((unsigned long) image_row_num);
-            int column = x.first;
+            int column = x.first + settings["width"]/2;
             int period = x.second;
-            std::cout << "best pair was: phase " << x.first << " freq: " << 1.0 / x.second << std::endl;
+            //std::cout << "best pair was: phase " << x.first << " freq: " << 1.0 / x.second << std::endl;
             // TODO: phase and freq are wrong
             do{
                 cv::Vec3b& pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
