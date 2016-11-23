@@ -33,7 +33,7 @@ std::vector<cv::Mat> ImagePreprocessor::process(){
         // if (im.empty()) continue; //only proceed if
         cv::Mat small_image;
         cv::resize(image, small_image, m_size); // settings["image_size"]);
-        cv::Mat intensity = ImagePreprocessor::convertToExG(image);
+        cv::Mat intensity = ImagePreprocessor::convertToExG(small_image);
         images.push_back(intensity);
     }
     return images;
