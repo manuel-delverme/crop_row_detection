@@ -44,16 +44,15 @@ int main(int argc, char** argv){
     settings["width"] = 178;
     settings["height"] = 178;
 
-    ImagePreprocessor preprocessor (argv[1], cv::Size(settings["height"],settings["width"]));
+    ImagePreprocessor preprocessor (argv[1], cv::Size((int) settings["height"], (int) settings["width"]));
     std::vector<cv::Mat> data = preprocessor.process();
     //TODO test results against paper-generated
-    CropRowDetector row_detector (42);	
 
     // vvv this is from cfg file
     int d_min = 8;
     int n_samples_per_octave = 70;
-    int n_octaves = 5;
-    //int window_width = 10; // out of my ass
+    // int n_octaves = 5;
+    int n_octaves = 4;
 
     cv::Mat temp_image;
 
@@ -62,12 +61,14 @@ int main(int argc, char** argv){
         // display_img(pIntensityImg);
         // row_detector.detect(pIntensityImg, temp
         // int center, // uc
-        std::cout << "parsing picture" << std::endl;
+        // std::cout << "parsing picture" << std::endl;
+        CropRowDetector row_detector(pIntensityImg); // TODO: split in constructor, and load
+
         std::vector<std::pair<int, int>> match_results = row_detector.template_matching(
                 pIntensityImg, d_min, n_samples_per_octave,
                 n_octaves, settings["a0"], settings["b0"],
-                settings["width"], 
-                settings["width"] / 2
+                (int) settings["width"],
+                (int) std::round(settings["width"] / 2)
         );
         cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
 
@@ -77,20 +78,31 @@ int main(int argc, char** argv){
 
         for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
             x = match_results.at((unsigned long) image_row_num);
-            int column = x.first + settings["width"]/2;
+            // int column = x.first + (int) std::round(settings["width"]/2);
+            int phase = x.first;
             int period = x.second;
-            //std::cout << "best pair was: phase " << x.first << " freq: " << 1.0 / x.second << std::endl;
-            // TODO: phase and freq are wrong
-            do{
-                cv::Vec3b& pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
+            int center_of_image = (int) std::round(settings["width"] / 2);
+            std::cout << phase << "," << period << std::endl;
+            int column = center_of_image + phase;
+            while(column < image_width) {
+                cv::Vec3b &pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
+                // std::cerr << ">drawing on: " << column << std::endl;
                 pPixel[2] = 255;
                 column += period;
-            } while(column <= image_width);
+            }
+
+            column = center_of_image + phase - period;
+            while(column >= 0) {
+                cv::Vec3b& pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
+                // std::cerr << "<drawing on: " << column << std::endl;
+                pPixel[2] = 255;
+                column -= period;
+            }
         }
         display_img(temp_image);
 
         // x_best = row_detector.find_optimal_x(f);
     }
-    std::cout << "done" << std::endl;
+    // std::cout << "done" << std::endl;
     return 0;
 }

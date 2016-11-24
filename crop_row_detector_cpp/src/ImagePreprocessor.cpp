@@ -8,7 +8,6 @@
 #include "ImagePreprocessor.h"
 
 ImagePreprocessor::ImagePreprocessor(std::string images_path, cv::Size target_size){
-    std::cout << "initd ImagePreprocessor " << std::endl;
     m_size = target_size;
     m_images_folder = images_path;
 }
@@ -25,10 +24,8 @@ std::vector<cv::Mat> ImagePreprocessor::process(){
     std::vector<cv::String> file_names;
     cv::glob(path, file_names, true); // recurse
 
-    std::cout << "resizing images to " << m_size  << std::endl;
     for (std::string file_path : file_names)
     {
-        std::cout << "loading " << file_path  << std::endl;
         cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
         // if (im.empty()) continue; //only proceed if
         cv::Mat small_image;
