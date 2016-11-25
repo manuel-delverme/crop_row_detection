@@ -42,8 +42,8 @@ int main(int argc, char** argv){
     std::map<std::string, double> settings; // setup();
     settings["a0"] = 1.28;
     settings["b0"] = 4.48;
-    settings["width"] = 178;
-    settings["height"] = 178;
+    settings["width"] = 300;//178;
+    settings["height"] = 300;//178;
 
     ImagePreprocessor preprocessor (argv[1], cv::Size((int) settings["height"], (int) settings["width"]));
     std::vector<cv::Mat> data = preprocessor.process();
