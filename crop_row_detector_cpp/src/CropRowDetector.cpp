@@ -11,14 +11,18 @@ using namespace std;
 
 CropRowDetector::CropRowDetector(cv::Mat const intensity_map) {
 
+    
+  
     cv::Mat intensity_map_64f;
     intensity_map.convertTo(intensity_map_64f, CV_64F);
     m_integral_image = cv::Mat::zeros( intensity_map.size(), CV_64F );
             
     for(int row = 0; row < intensity_map.rows; row++) {
-        for (int column = 1; column < intensity_map.cols; column++) 
-            m_integral_image.row(row).col(column) = intensity_map_64f.row(row).col(column)
-                                                    + m_integral_image.row(row).col(column - 1);
+        for (int column = 1; column < intensity_map.cols; column++){
+            m_integral_image.at<double>(row,column) = (double)intensity_map.at<uchar>(row,column) + m_integral_image.at<double>(row,column-1);
+                                                    
+	    //cout << m_integral_image.row(row).col(column) << endl;
+	}
     }
     
 }
@@ -75,13 +79,16 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
     double best_energy = -1;
 
     for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
-        std::cerr << "row: " << image_row_num << std::endl;
+        //std::cerr << "row: " << image_row_num << std::endl;
 	
+      
         for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
             period = (int) (d_min * std::pow(2, (double) sample_number / (double) n_samples_per_octave));
             int half_band = (int) std::round(0.5 * period);
+	    
 
             for (int phase = -half_band; phase < half_band; phase++) { // phase
+
                 x = std::make_pair(phase, period);
                 energy = CrossCorrelation(
                         image_row_num, x,
@@ -114,19 +121,22 @@ double CropRowDetector::CrossCorrelation(int row, std::pair<int, int> template_v
     double negative_correlation_value = 0;
     int positive_pixels = 0;
     int negative_pixels = 0;
+    
+    
     do{
-        positive_pulse_start = (int) (pulse_center - positive_pulse_width / 2);
-        positive_pulse_end = (int) (positive_pulse_start + positive_pulse_width);
-        negative_pulse_start = (int) (pulse_center + period / 2 - negative_pulse_width / 2);
-        negative_pulse_end = (int) (negative_pulse_start + negative_pulse_width);
-        positive_pulse_start = saturate(positive_pulse_start, 0, image_width - 1);
-        positive_pulse_end = saturate(positive_pulse_end, 0, image_width - 1);
-        negative_pulse_start = saturate(negative_pulse_start, 0, image_width - 1);
-        negative_pulse_end = saturate(negative_pulse_end, 0, image_width - 1);
 
+        positive_pulse_start = std::round(pulse_center - positive_pulse_width / 2);
+	positive_pulse_end = (int)(positive_pulse_start + positive_pulse_width);
+	negative_pulse_start = std::round(pulse_center + period / 2 - negative_pulse_width / 2);
+	negative_pulse_end = (int)(negative_pulse_start + negative_pulse_width);
+	positive_pulse_start = saturate(positive_pulse_start, 0, image_width - 1);
+	positive_pulse_end = saturate(positive_pulse_end, 0, image_width - 1);
+	negative_pulse_start = saturate(negative_pulse_start, 0, image_width - 1);
+	negative_pulse_end = saturate(negative_pulse_end, 0, image_width - 1);   
+    
         positive_correlation_value += cumulative_sum(row, positive_pulse_end)
                                       - cumulative_sum(row, positive_pulse_start);
-
+				      
         negative_correlation_value += cumulative_sum(row, negative_pulse_end)
                                       -cumulative_sum(row, negative_pulse_start);
 
@@ -134,7 +144,7 @@ double CropRowDetector::CrossCorrelation(int row, std::pair<int, int> template_v
         negative_pixels += negative_pulse_end - negative_pulse_start;
         pulse_center += period;
     } while(pulse_center - positive_pulse_width/2 <= image_width);
-
+    
     int positive_pulse_height;
     if(positive_pixels != 0) {
         positive_pulse_height = 1 / positive_pixels;
