@@ -42,10 +42,10 @@ int main(int argc, char** argv){
     std::map<std::string, double> settings; // setup();
     settings["a0"] = 1.28;
     settings["b0"] = 4.48;
-    settings["width"] = 300;//178;
+    settings["width"] = 400;//178;
     settings["height"] = 300;//178;
 
-    ImagePreprocessor preprocessor (argv[1], cv::Size((int) settings["height"], (int) settings["width"]));
+    ImagePreprocessor preprocessor (argv[1], cv::Size((int) settings["width"], (int) settings["height"]));
     std::vector<cv::Mat> data = preprocessor.process();
     //TODO test results against paper-generated
 
@@ -53,7 +53,6 @@ int main(int argc, char** argv){
     // vvv this is from cfg file
     int d_min = 8;
     int n_samples_per_octave = 70;
-    // int n_octaves = 5;
     int n_octaves = 5;
 
     cv::Mat temp_image;

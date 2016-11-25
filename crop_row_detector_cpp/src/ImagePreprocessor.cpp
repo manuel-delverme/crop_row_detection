@@ -12,27 +12,24 @@ ImagePreprocessor::ImagePreprocessor(std::string images_path, cv::Size target_si
     m_images_folder = images_path;
 }
 cv::Mat ImagePreprocessor::convertToExG(cv::Mat &image){
+  
     cv::Mat intensity = cv::Mat::zeros(image.size(), CV_8UC1);
     cv::Mat bgr[3];   //destination array
     cv::split(image, bgr);
     
-    double blueMax = 0, greenMax = 0, redMax = 0;
+    double blueMax, greenMax, redMax;
+    double blueMin, greenMin, redMin;
     // Finding maximum values in all channels
-    
-    for( int c = 0; c < bgr[0].cols; c++) {
-      for( int r = 0; r < bgr[0].rows; r++) {  
-	  blueMax = (bgr[0].at<uchar>(c,r)>blueMax)?bgr[0].at<uchar>(c,r):blueMax;
-	  greenMax = (bgr[1].at<uchar>(c,r)>greenMax)?bgr[1].at<uchar>(c,r):greenMax;
-	  redMax = (bgr[2].at<uchar>(c,r)>redMax)?bgr[2].at<uchar>(c,r):redMax;
-      }
-    }
-      
+    cv::minMaxLoc(bgr[0], &blueMin, &blueMax);
+    cv::minMaxLoc(bgr[1], &greenMin, &greenMax);
+    cv::minMaxLoc(bgr[2], &redMin, &redMax);
+          
     double blueNorm, greenNorm, redNorm;
     double blue, green, red;
     double sumNorm, ExG;
     
-    for( int c = 0; c < bgr[0].cols; c++) {
-      for( int r = 0; r < bgr[0].rows; r++) {
+    for( int c = 0; c < bgr[0].rows; c++) {
+      for( int r = 0; r < bgr[0].cols; r++) {
 		//normalize all pixels with max value of every channel
 		blueNorm = (double) bgr[0].at<uchar>(c,r) / blueMax;
 		greenNorm = (double) bgr[1].at<uchar>(c,r) / greenMax;
@@ -64,9 +61,10 @@ std::vector<cv::Mat> ImagePreprocessor::process(){
     {
         cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
         // if (im.empty()) continue; //only proceed if
-        cv::Mat small_image;
-        cv::resize(image, small_image, m_size); // settings["image_size"]);
-        cv::Mat intensity = ImagePreprocessor::convertToExG(small_image);
+        cv::Mat resized_image;
+        cv::resize(image, resized_image, m_size); // settings["image_size"]);
+        cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
+	
         images.push_back(intensity);
     }
     return images;

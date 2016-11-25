@@ -70,7 +70,7 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
     std::pair<int, int> x;
     double energy = 0;
     std::vector<std::pair<int,int>> best_pairs;
-    
+            
     int n_samples = (n_samples_per_octave * n_octaves);
     double best_energy = -1;
 
@@ -148,12 +148,16 @@ double CropRowDetector::CrossCorrelation(int row, std::pair<int, int> template_v
     } else {
         negative_pulse_height = 0;
     }
+        
     return positive_pulse_height * positive_correlation_value - negative_pulse_height * negative_correlation_value;
 }
+
+
 
 double CropRowDetector::cumulative_sum(int v, int u) {
     return m_integral_image.at<double>(v, u);
 }
+
 /*
 std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<int> f, X, h, x){
     for(int v=0; v < h; v++){
