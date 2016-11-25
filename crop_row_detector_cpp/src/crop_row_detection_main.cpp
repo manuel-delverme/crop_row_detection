@@ -12,6 +12,7 @@
 #include "ImagePreprocessor.h"
 #include "CropRowDetector.h"
 
+using namespace std;
 
 void display_img(cv::Mat image){
     cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
@@ -48,6 +49,7 @@ int main(int argc, char** argv){
     std::vector<cv::Mat> data = preprocessor.process();
     //TODO test results against paper-generated
 
+    
     // vvv this is from cfg file
     int d_min = 8;
     int n_samples_per_octave = 70;
@@ -63,7 +65,6 @@ int main(int argc, char** argv){
         // int center, // uc
         // std::cout << "parsing picture" << std::endl;
         CropRowDetector row_detector(pIntensityImg); // TODO: split in constructor, and load
-
         std::vector<std::pair<int, int>> match_results = row_detector.template_matching(
                 pIntensityImg, d_min, n_samples_per_octave,
                 n_octaves, settings["a0"], settings["b0"],
@@ -72,6 +73,8 @@ int main(int argc, char** argv){
         );
         cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
 
+	
+	
         int image_height = pIntensityImg.size[0];
         int image_width = pIntensityImg.size[1];
         std::pair<int, int> x;

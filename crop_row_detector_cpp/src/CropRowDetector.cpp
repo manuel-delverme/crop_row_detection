@@ -7,15 +7,20 @@
 #include <opencv2/plot.hpp>
 #include "CropRowDetector.h"
 
-CropRowDetector::CropRowDetector(cv::Mat const intensity_map) {
-    m_integral_image.convertTo(intensity_map, CV_64F);
+using namespace std;
 
+CropRowDetector::CropRowDetector(cv::Mat const intensity_map) {
+
+    cv::Mat intensity_map_64f;
+    intensity_map.convertTo(intensity_map_64f, CV_64F);
+    m_integral_image = cv::Mat::zeros( intensity_map.size(), CV_64F );
+            
     for(int row = 0; row < intensity_map.rows; row++) {
-        for (int column = 1; column < intensity_map.cols; column++) {
-            m_integral_image.row(row).col(column) = intensity_map.row(row).col(column)
+        for (int column = 1; column < intensity_map.cols; column++) 
+            m_integral_image.row(row).col(column) = intensity_map_64f.row(row).col(column)
                                                     + m_integral_image.row(row).col(column - 1);
-        }
     }
+    
 }
 
 cv::Mat CropRowDetector::detect(cv::Mat& intensity, cv::Mat& templ){
@@ -65,13 +70,13 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
     std::pair<int, int> x;
     double energy = 0;
     std::vector<std::pair<int,int>> best_pairs;
-
+    
     int n_samples = (n_samples_per_octave * n_octaves);
     double best_energy = -1;
 
     for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
         std::cerr << "row: " << image_row_num << std::endl;
-
+	
         for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
             period = (int) (d_min * std::pow(2, (double) sample_number / (double) n_samples_per_octave));
             int half_band = (int) std::round(0.5 * period);
