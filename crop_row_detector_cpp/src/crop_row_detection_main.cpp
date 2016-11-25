@@ -54,7 +54,7 @@ int main(int argc, char** argv){
     int d_min = 8;
     int n_samples_per_octave = 70;
     // int n_octaves = 5;
-    int n_octaves = 4;
+    int n_octaves = 5;
 
     cv::Mat temp_image;
 
