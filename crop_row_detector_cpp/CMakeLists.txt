@@ -8,7 +8,7 @@ set(CMAKE_BUILD_TYPE Debug)
 #   set(CMAKE_BUILD_TYPE "Release")
 # endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lm -Wall -Wextra -Wshadow -Wnon-virtual-dtor") # -pedantic")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lm -Wall -Wextra -Wshadow -Wnon-virtual-dtor -pedantic -Wconversion")
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=nocona -O3")
 # set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
