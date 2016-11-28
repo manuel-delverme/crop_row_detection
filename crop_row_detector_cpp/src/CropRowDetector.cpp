@@ -112,20 +112,8 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
                                          double positive_pulse_width, double negative_pulse_width,
                                          int image_width, int center_of_row){
 
-    // here be dragons
-    // for(v = 0; v < m_h; v++, I_ += w, DP_ += n)
-    // {
-    // integral image of the row
-    // II[0] = (int)(I_[0]);
+   
 
-    // for(u = 1; u < w; u++)
-    //     II[u] = II[u - 1] + I_[u];
-
-    // convolutions
-
-    // bestScore = 0.0;
-
-    // d = (double)8;
     // DP__ = DP_;
     // for(id = 0; id < m_nd; id++, d *= m_dstep, DP__ += m_nc)
     // {
@@ -142,10 +130,18 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     // halfd = 0.5 * d;
     // fub =  halfd - halfb;
     // pDP = DP__ + m_nc / 2 - crange;
+  
+  
+      
+    double half_width = (double) image_width/2;
     double phase = template_var_param.first;
     double period = template_var_param.second;
-
-
+    double period_scale_factor = 1/8;   // Scale factor: fattore di scala relativo ai parametri ottimi trovati dagli autori!!!!
+    double scale = (double)period*period_scale_factor; 
+    
+    int a = (int)std::floor(scale*positive_pulse_width+.5);   // TODO: spostare calcoli fuori dalla funzione
+    int b = (int)std::floor(scale*negative_pulse_width+.5); 
+    
     int negative_pulse_end;
     int negative_pulse_start;
     int positive_pulse_end;
@@ -156,10 +152,13 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     int positive_pixels = 0;
     int negative_pixels = 0;
 
-    int kStart = (int)floor((-(image_width / 2 + phase) + halfa) / period);
-    kEnd = (int)floor(((image_width / 2 - phase) + halfa) / period);
+    int kStart = (int)floor((-(image_width / 2 + phase) + halfa) / period);    // offset prima onda
+    int kEnd = (int)floor(((image_width / 2 - phase) + halfa) / period);   // offset ultima onda prima della fine dell'immagine
 
-    pulse_center = phase + (double)kStart * period + halfw;
+    // prima onda e ultima caso particolare, calcolato a parte,
+    // frequenze intermedie iterate
+
+    pulse_center = phase + (double)kStart * period + half_width;
     positive_pulse_start = DOUBLE2INT(pulse_center - halfa);
     positive_pulse_end = (int) (positive_pulse_start + positive_pulse_width - 1); // TODO check why he was not casting
 
@@ -266,7 +265,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
         bestd = period;
     }
 
-    do{
+    /*do{
         positive_pulse_start = (int) (pulse_center - positive_pulse_width / 2);
         positive_pulse_end = (int)(positive_pulse_start + positive_pulse_width - 1); // TODO: EXPLAIN -1
         negative_pulse_start = (int) (pulse_center + period / 2 - negative_pulse_width / 2);
@@ -301,7 +300,9 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
         negative_pulse_height = 0.f;
     }
 
-    return positive_pulse_height * positive_correlation_value - negative_pulse_height * negative_correlation_value;
+    return positive_pulse_height * positive_correlation_value - negative_pulse_height * negative_correlation_value;*/
+    
+    return 0;
 }
 
 
