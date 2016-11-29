@@ -156,10 +156,10 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     int positive_pixels = 0;
     int negative_pixels = 0;
 
-    int kStart = (int)floor((-(image_width / 2 + phase) + halfa) / period);
-    kEnd = (int)floor(((image_width / 2 - phase) + halfa) / period);
+    int offset_first_wave = (int)floor((-(image_width / 2 + phase) + halfa) / period);
+    int offset_last_wave = (int)floor(((image_width / 2 - phase) + halfa) / period);
 
-    pulse_center = phase + (double)kStart * period + halfw;
+    pulse_center = phase + (double)offset_first_wave * period + halfw;
     positive_pulse_start = DOUBLE2INT(pulse_center - halfa);
     positive_pulse_end = (int) (positive_pulse_start + positive_pulse_width - 1); // TODO check why he was not casting
 
@@ -190,7 +190,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 
     pulse_center += period;
 
-    for(k = kStart + 1; k < kEnd; k++, pulse_center += period)
+    for(k = offset_first_wave + 1; k < offset_last_wave; k++, pulse_center += period)
     {
         positive_pulse_start = DOUBLE2INT(pulse_center - halfa);
 
@@ -217,7 +217,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     positive_correlation_value += cumulative_sum(row_number, positive_pulse_start - 1, positive_pulse_end);
     positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
 
-    negative_pulse_start = DOUBLE2INT(pulse_center + fub);
+    negative_pulse_start = std::round(pulse_center + fub);
 
     if(negative_pulse_start < image_width)
     {
@@ -241,7 +241,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 
     while(c_position <= m_nc)
     {
-        pDP_->D = score;
+        pDP_->cost = score;
 
         pDP_ += crange2;
         c_position += crange2;
@@ -252,7 +252,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 
     while(c_position >= 0)
     {
-        pDP_->D = score;
+        pDP_->cost = score;
 
         pDP_ -= crange2;
         c_position -= crange2;
@@ -310,32 +310,34 @@ double CropRowDetector::cumulative_sum(int v, int start, int end) {
     return m_integral_image.at<double>(v, end) - m_integral_image.at<double>(v, start);
 }
 
-/*
-std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<int> f, X, h, x){
-    for(int v=0; v < h; v++){
-        f_max[v] = std::max(f[v]);
+std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<double> energy, X, num_rows, x, double f_low=1, double D_max){
+    for(int row_number=0; row_number < num_rows; row_number++){
+        max_energy[row_number] = std::max(energy.at<double>(row_number));
         for(std::pair<int, int> x: X){
-            if(f_max[v] >= f_low){
-                D[v][x] = min( (1-f[v][x]) / f_max[v], D_max);
+            if(max_energy[row_number] >= f_low){
+                cost[row_number][x] =
+                        std::min((1.0 -
+                                         energy.at<double>(row_number, x)) /
+                                         max_energy[row_number],
+                                  D_max);
             } else {
-                D[v][x] = D_max;
+                cost[row_number][x] = D_max;
             }
-            if(v != 0){
-                B[v][x] = D[v][x] + U[v-1][x];
+            if(row_number > 0){
+                best[row_number][x] = cost[row_number][x] + U[row_number-1][x];
             } else{
-                B[v][x] = D[v][x];
+                best[row_number][x] = cost[row_number][x];
             }
         }
-        if(v < h-1){
+        if(row_number < h-1){
             for(std::pair<int, int> x: X) {
                 for(std::pair<int, int> x_prime: X) {
-                    U_prime[v][x][x_prime] = B[v][x_prime] + V(x, x_prime);
-                    T_prime[v][x] = B[v][x_prime] + V(x_prime, x);
+                    U_prime[row_number][x][x_prime] = best[row_number][x_prime] + V(x, x_prime);
+                    T_prime[row_number][x] = best[row_number][x_prime] + V(x_prime, x);
                 }
-                U[v][x] = min(U_prime[v][x]);
-                T[v][x] = argmin(T_prime[v][x]);
+                U[row_number][x] = min(U_prime[row_number][x]);
+                T[row_number][x] = argmin(T_prime[row_number][x]);
             }
         }
     }
 }
-*/
