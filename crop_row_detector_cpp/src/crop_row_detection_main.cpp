@@ -67,12 +67,10 @@ int main(int argc, char** argv){
         std::vector<std::pair<int, int>> match_results = row_detector.template_matching(
                 pIntensityImg, d_min, n_samples_per_octave,
                 n_octaves, settings["a0"], settings["b0"],
-                (int) settings["width"],
-                (int) std::round(settings["width"] / 2)
-        );
+                (int) settings["width"]);
         cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
 
-	
+	cout << "dopo template matching" << endl;
 	
         int image_height = pIntensityImg.size[0];
         int image_width = pIntensityImg.size[1];
@@ -84,11 +82,11 @@ int main(int argc, char** argv){
             int phase = x.first;
             int period = x.second;
             int center_of_image = (int) std::round(settings["width"] / 2);
-            std::cout << phase << "," << period << std::endl;
+            std::cout << image_row_num << " " << phase << "," << period << std::endl;
             int column = center_of_image + phase;
             while(column < image_width) {
                 cv::Vec3b &pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
-                // std::cerr << ">drawing on: " << column << std::endl;
+                //std::cerr << ">drawing on: " << column << std::endl;
                 pPixel[2] = 255;
                 column += period;
             }
@@ -105,6 +103,6 @@ int main(int argc, char** argv){
 
         // x_best = row_detector.find_optimal_x(f);
     }
-    // std::cout << "done" << std::endl;
+    std::cout << "done" << std::endl;
     return 0;
 }
