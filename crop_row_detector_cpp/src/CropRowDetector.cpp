@@ -202,7 +202,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 	negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
     }
     
-    positive_pulse_start = DOUBLE2INT(positive_pulse_center - halfa);
+    positive_pulse_start = std::floor(positive_pulse_center - halfa);
 
     positive_pulse_end = positive_pulse_start + a - 1;
 
@@ -215,7 +215,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
 
 
-    negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
+    negative_pulse_start = std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
     if(negative_pulse_start < image_width)
     {
 	    negative_pulse_end = negative_pulse_start + b - 1;
