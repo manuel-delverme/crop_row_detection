@@ -5,14 +5,17 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/plot.hpp>
-#include <jpegint.h>
 #include "CropRowDetector.h"
+
+// MACRO per fixing del biased rounding 
+#define DOUBLE2INT(x)	(int)floor(x + 0.5)
 
 using namespace std;
 
 CropRowDetector::CropRowDetector(cv::Mat const intensity_map) {
 
-
+    /*for(unsigned int i=0; i<20; i++)
+      cout << (double)intensity_map.at<uchar>(0,i) << endl;*/
 
     cv::Mat intensity_map_64f;
     intensity_map.convertTo(intensity_map_64f, CV_64F);
@@ -55,7 +58,7 @@ cv::Mat CropRowDetector::detect(cv::Mat& intensity, cv::Mat& templ){
     return result;
 }
 
-/*
+/*f
  * returns the best pair x for each row
  * */
 std::vector<std::pair<int, int>> CropRowDetector::template_matching(
@@ -65,12 +68,11 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
         int n_octaves,
         double positive_pulse_width,
         double negative_pulse_width,
-        int window_width, // w
-        int center_of_image_row // uc
+        int window_width // w
 ) {
     std::pair<int, int> best_pair;
     int image_height = Intensity.size[0];
-    int period = 0;
+    double period = 0;
     // int center = window_width / 2; TODO useme
     std::pair<int, int> x;
     double energy = 0;
@@ -82,11 +84,9 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
     for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
         //std::cerr << "row: " << image_row_num << std::endl;
 
-
         for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
-            period = (int) (d_min * std::pow(2, (double) sample_number / (double) n_samples_per_octave));
+            period = (d_min * std::pow(2, (double) sample_number / (double) n_samples_per_octave));
             int half_band = (int) std::round(0.5 * period);
-
 
             for (int phase = -half_band; phase < half_band; phase++) { // phase
 
@@ -94,9 +94,8 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
                 energy = CrossCorrelation(
                         image_row_num, x,
                         positive_pulse_width, negative_pulse_width,
-                        window_width, center_of_image_row);
+                        window_width);
 
-                // std::cout << "phase: " << x.first << " period: " << x.second << " energy: " << energy << std::endl;
                 if(energy > best_energy){
                     best_energy = energy;
                     best_pair = x;
@@ -105,210 +104,138 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
         }
         best_pairs.push_back(best_pair);
         best_energy = -1;
+	
     }
     return best_pairs;
 }
 double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> template_var_param,
                                          double positive_pulse_width, double negative_pulse_width,
-                                         int image_width, int center_of_row){
+                                         int image_width){
 
-   
-
-    // DP__ = DP_;
-    // for(id = 0; id < m_nd; id++, d *= m_dstep, DP__ += m_nc)
-    // {
-    // crange = (int)floor(0.5 * d);
-    // crange_[id] = crange;
-
-    // scale = d / fd0;
-    // fTmp = floor(scale * fa0 + 0.5);
-    // a = (int)fTmp;
-    // halfa = 0.5 * fTmp;
-    // fTmp = floor(scale * fb0 + 0.5);
-    // b = (int)fTmp;
-    // halfb = 0.5 * fTmp;
-    // halfd = 0.5 * d;
-    // fub =  halfd - halfb;
-    // pDP = DP__ + m_nc / 2 - crange;
-  
-  
       
-    double half_width = (double) image_width/2;
-    double phase = template_var_param.first;
-    double period = template_var_param.second;
-    double period_scale_factor = 1/8;   // Scale factor: fattore di scala relativo ai parametri ottimi trovati dagli autori!!!!
-    double scale = (double)period*period_scale_factor; 
-    
-    int a = (int)std::floor(scale*positive_pulse_width+.5);   // TODO: spostare calcoli fuori dalla funzione
-    int b = (int)std::floor(scale*negative_pulse_width+.5); 
-    
     int negative_pulse_end;
     int negative_pulse_start;
     int positive_pulse_end;
     int positive_pulse_start;
-    double pulse_center = center_of_row + phase - std::ceil ((center_of_row + phase) / period ) * period;
     double positive_correlation_value = 0;
     double negative_correlation_value = 0;
     int positive_pixels = 0;
     int negative_pixels = 0;
-
+  
+    // Calcolo quantità necesarrie a CrossCorrelation
+    double half_width = (double) image_width/2;
+    double phase = template_var_param.first;
+    double period = template_var_param.second;
+    double period_scale_factor = .125;   // Scale factor: fattore di scala relativo ai parametri ottimi trovati dagli autori!!!!
+    double scale = period*period_scale_factor;
+    
+    int a = DOUBLE2INT(scale*positive_pulse_width);
+    int b = DOUBLE2INT(scale*negative_pulse_width);
+    
+    double halfb = .5*b;
+    double halfa = .5*a;
+    double halfd = .5*period;
+    
     int kStart = (int)floor((-(image_width / 2 + phase) + halfa) / period);    // offset prima onda
-    int kEnd = (int)floor(((image_width / 2 - phase) + halfa) / period);   // offset ultima onda prima della fine dell'immagine
-
-    // prima onda e ultima caso particolare, calcolato a parte,
-    // frequenze intermedie iterate
-
-    pulse_center = phase + (double)kStart * period + half_width;
-    positive_pulse_start = DOUBLE2INT(pulse_center - halfa);
-    positive_pulse_end = (int) (positive_pulse_start + positive_pulse_width - 1); // TODO check why he was not casting
+    int kEnd = (int)floor(((image_width / 2 - phase) + halfa) / period);   // offset ultima onda prima della fine dell'immagine 
+    
+    
+    // Calcolo centro dell'onda quadra positiva e negativa
+    double distance_positive_negative_pulse_center =  halfd - halfb;
+    double positive_pulse_center = (double)phase + (double)kStart * (double)period + half_width;
+    
+    
+    // Calcolo per Onda ad inizio immagine, non calcolabile con la classica routine
+    
+    positive_pulse_start = std::floor(positive_pulse_center - halfa);
+    positive_pulse_end = positive_pulse_start + a - 1;
+    
+    negative_pulse_start = std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
+    negative_pulse_end = negative_pulse_start + b - 1;
+    
+    //cout << positive_pulse_center <<  " " << halfa << " " << positive_pulse_start << " " << positive_pulse_end << " " << negative_pulse_start << " " << negative_pulse_end << endl;
 
     if(positive_pulse_end >= 0) {
-        positive_correlation_value = cumulative_sum(row_number, 0, positive_pulse_end);
-        positive_pixels = positive_pulse_end;
-    } else {
-        positive_correlation_value = 0;
-        positive_pixels = 0;
+	    positive_correlation_value = cumulative_sum(row_number, positive_pulse_end);
+	    positive_pixels = positive_pulse_end;
     }
-
-    negative_pulse_start = DOUBLE2INT(pulse_center + fub);
-    negative_pulse_end = (int) (negative_pulse_start + negative_pulse_width - 1);
+    else {
+	    positive_correlation_value = 0;
+	    positive_pixels = 0;
+    }
 
     if(negative_pulse_start < 0)
-        negative_pulse_start = 0;
+	    negative_pulse_start = 0;				
 
-    if(negative_pulse_end >= 0)
-    {
-        negative_correlation_value = cumulative_sum(row_number, negative_pulse_start - 1, negative_pulse_end);
-        negative_pixels = negative_pulse_end - negative_pulse_start + 1;
+    if(negative_pulse_end >= 0) {
+	    negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
+					-cumulative_sum(row_number, negative_pulse_start); //tolto  -cumulative_sum(row_number, negative_pulse_start-1);
+	     
+	    negative_pixels = negative_pulse_end - negative_pulse_start + 1;
     }
-    else
-    {
-        negative_correlation_value = 0;
-        negative_pixels = 0;
-    }
-
-    pulse_center += period;
-
-    for(k = kStart + 1; k < kEnd; k++, pulse_center += period)
-    {
-        positive_pulse_start = DOUBLE2INT(pulse_center - halfa);
-
-        positive_pulse_end = positive_pulse_start + positive_pulse_width - 1;
-
-        positive_correlation_value += cumulative_sum(row_number, positive_pulse_start - 1, positive_pulse_end);
-        positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
-
-        negative_pulse_start = DOUBLE2INT(pulse_center + fub);
-
-        negative_pulse_end = negative_pulse_start + negative_pulse_width - 1;
-
-        negative_correlation_value += cumulative_sum(row_number, negative_pulse_start - 1, negative_pulse_end);
-        negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
+    else {
+	    negative_correlation_value = 0;
+	    negative_pixels = 0;
     }
 
-    positive_pulse_start = DOUBLE2INT(pulse_center - halfa);
+    positive_pulse_center += period;
+    
+    for(int k = kStart + 1; k < kEnd; k++, positive_pulse_center += period)	{
+      
+	
+	  
 
-    positive_pulse_end = positive_pulse_start + positive_pulse_width - 1;
+	positive_pulse_start = std::floor(positive_pulse_center - halfa);
+	positive_pulse_end = positive_pulse_start + a - 1;
+
+	positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
+                                      - cumulative_sum(row_number, positive_pulse_start-1);
+	
+	positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
+
+	negative_pulse_start = std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
+	negative_pulse_end = negative_pulse_start + b - 1;
+
+	negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
+                                      -cumulative_sum(row_number, negative_pulse_start-1);
+						      
+	negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
+    }
+    
+    positive_pulse_start = DOUBLE2INT(positive_pulse_center - halfa);
+
+    positive_pulse_end = positive_pulse_start + a - 1;
 
     if(positive_pulse_end >= image_width)
-        positive_pulse_end = image_width - 1;
+	    positive_pulse_end = image_width - 1;
 
-    positive_correlation_value += cumulative_sum(row_number, positive_pulse_start - 1, positive_pulse_end);
+    positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
+                                  -cumulative_sum(row_number, positive_pulse_start-1);
+	
     positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
 
-    negative_pulse_start = DOUBLE2INT(pulse_center + fub);
 
+    negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
     if(negative_pulse_start < image_width)
     {
-        negative_pulse_end = negative_pulse_start + negative_pulse_width - 1;
-        if(negative_pulse_end >= image_width)
-            negative_pulse_end = image_width - 1;
-        negative_correlation_value += cumulative_sum(row_number, negative_pulse_start - 1, negative_pulse_end);
-        negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
+	    negative_pulse_end = negative_pulse_start + b - 1;
 
-        //debugCounter++;
+	    if(negative_pulse_end >= image_width)
+		    negative_pulse_end = image_width - 1;
+
+	    negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
+                                      -cumulative_sum(row_number, negative_pulse_start-1);
+				      
+	    negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
     }
-    //score = (double)(nb * Sa - na * Sb) / (double)(na + nb);
-    score = (double)(negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) / (double)(positive_pixels * negative_pixels);		// new score computation
-
-    //END IMAGE
-
-    //copy D value for c values in range <-m_nc/2, m_nc/2>
-    crange2 = 2*crange;
-    pDP_ = pDP + crange2; //pDP_ pointer for copying D value in c range <-m_nc/2, m_nc/2>
-    c_position = m_nc*0.5 + phase + crange2;
-
-    while(c_position <= m_nc)
-    {
-        pDP_->D = score;
-
-        pDP_ += crange2;
-        c_position += crange2;
-    }
-
-    pDP_ = pDP - crange2;
-    c_position = m_nc*0.5 + phase - crange2;
-
-    while(c_position >= 0)
-    {
-        pDP_->D = score;
-
-        pDP_ -= crange2;
-        c_position -= crange2;
-    }
-
-    if(score > bestScore)
-    {
-        bestScore = score;
-        bestc = phase;
-        bestid = id;
-        bestd = period;
-    }
-
-    /*do{
-        positive_pulse_start = (int) (pulse_center - positive_pulse_width / 2);
-        positive_pulse_end = (int)(positive_pulse_start + positive_pulse_width - 1); // TODO: EXPLAIN -1
-        negative_pulse_start = (int) (pulse_center + period / 2 - negative_pulse_width / 2);
-        negative_pulse_end = (int)(negative_pulse_start + negative_pulse_width - 1);
-        positive_pulse_start = saturate(positive_pulse_start, 0, image_width - 1);
-        positive_pulse_end = saturate(positive_pulse_end, 0, image_width - 1);
-        negative_pulse_start = saturate(negative_pulse_start, 0, image_width - 1);
-        negative_pulse_end = saturate(negative_pulse_end, 0, image_width - 1);
-
-        positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
-                                      - cumulative_sum(row_number, positive_pulse_start);
-
-        negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
-                                      -cumulative_sum(row_number, negative_pulse_start);
-
-        positive_pixels += positive_pulse_end - positive_pulse_start;
-        negative_pixels += negative_pulse_end - negative_pulse_start;
-        pulse_center += period;
-    } while(pulse_center - positive_pulse_width/2 <= image_width);
-
-    float positive_pulse_height;
-    if(positive_pixels != 0) {
-        positive_pulse_height = 1.f / positive_pixels;
-    } else {
-        positive_pulse_height = 0.f;
-    }
-
-    float negative_pulse_height;
-    if(negative_pixels != 0){
-        negative_pulse_height = 1.f/negative_pixels;
-    } else {
-        negative_pulse_height = 0.f;
-    }
-
-    return positive_pulse_height * positive_correlation_value - negative_pulse_height * negative_correlation_value;*/
-    
-    return 0;
+   
+    return (double)(negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) / (double)(positive_pixels * negative_pixels);
 }
 
 
 
-double CropRowDetector::cumulative_sum(int v, int start, int end) {
-    return m_integral_image.at<double>(v, end) - m_integral_image.at<double>(v, start);
+double CropRowDetector::cumulative_sum(int v, int start) {
+    return m_integral_image.at<double>(v, start);
 }
 
 /*

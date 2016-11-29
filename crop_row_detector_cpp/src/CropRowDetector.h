@@ -18,13 +18,13 @@ public:
     std::vector<std::pair<int, int>> template_matching(const cv::Mat& Intensity,
                                                        int d_min,int n_samples_per_octave,int n_octaves,
                                                        double positive_pulse_width, double negative_pulse_width,
-                                                       int window_width, int center_of_image_row
-    );
+                                                       int window_width);
+    
     // std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<int> f);
     double CrossCorrelation(int row_number, std::pair<int, int> template_var_param, double positive_pulse_width,
-                            double negative_pulse_width, int image_width, int center_of_row);
+                            double negative_pulse_width, int image_width);
 private:
     cv::Mat m_integral_image;
-    double cumulative_sum(int v, int start, int end);
+    double cumulative_sum(int v, int start);
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
