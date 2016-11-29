@@ -9,6 +9,16 @@
 class CropRowDetector{
     // int width;
 public:
+  
+    int negative_pulse_end, negative_pulse_start,
+        positive_pulse_end, positive_pulse_start,
+	positive_pixels, negative_pixels;
+    double positive_correlation_value, negative_correlation_value;
+
+    double half_width, period_scale_factor;
+  
+  
+   
     CropRowDetector(cv::Mat const);
     cv::Mat detect(cv::Mat& intensity, cv::Mat& temp);
 

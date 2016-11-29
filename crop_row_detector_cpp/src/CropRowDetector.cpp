@@ -14,20 +14,19 @@ using namespace std;
 
 CropRowDetector::CropRowDetector(cv::Mat const intensity_map) {
 
-    /*for(unsigned int i=0; i<20; i++)
-      cout << (double)intensity_map.at<uchar>(0,i) << endl;*/
+
 
     cv::Mat intensity_map_64f;
     intensity_map.convertTo(intensity_map_64f, CV_64F);
     m_integral_image = cv::Mat::zeros( intensity_map.size(), CV_64F );
 
     for(int row = 0; row < intensity_map.rows; row++) {
-        for (int column = 1; column < intensity_map.cols; column++){
+        for (int column = 1; column < intensity_map.cols; column++)
             m_integral_image.at<double>(row,column) = (double)intensity_map.at<uchar>(row,column) + m_integral_image.at<double>(row,column-1);
-
-            //cout << m_integral_image.row(row).col(column) << endl;
-        }
     }
+    
+    period_scale_factor = .125;
+    half_width = intensity_map.cols/2;
 
 }
 
@@ -87,7 +86,7 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
         for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
             period = (d_min * std::pow(2, (double) sample_number / (double) n_samples_per_octave));
             int half_band = (int) std::round(0.5 * period);
-
+	    
             for (int phase = -half_band; phase < half_band; phase++) { // phase
 
                 x = std::make_pair(phase, period);
@@ -112,21 +111,12 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
                                          double positive_pulse_width, double negative_pulse_width,
                                          int image_width){
 
-      
-    int negative_pulse_end;
-    int negative_pulse_start;
-    int positive_pulse_end;
-    int positive_pulse_start;
-    double positive_correlation_value = 0;
-    double negative_correlation_value = 0;
-    int positive_pixels = 0;
-    int negative_pixels = 0;
-  
-    // Calcolo quantità necesarrie a CrossCorrelation
-    double half_width = (double) image_width/2;
+    
+
     double phase = template_var_param.first;
     double period = template_var_param.second;
-    double period_scale_factor = .125;   // Scale factor: fattore di scala relativo ai parametri ottimi trovati dagli autori!!!!
+  
+    // Calcolo quantità necesarrie a CrossCorrelation
     double scale = period*period_scale_factor;
     
     int a = DOUBLE2INT(scale*positive_pulse_width);
@@ -160,9 +150,10 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 	    positive_pixels = positive_pulse_end;
     }
     else {
-	    positive_correlation_value = 0;
-	    positive_pixels = 0;
+      positive_correlation_value = 0;
+      positive_pixels = 0;
     }
+
 
     if(negative_pulse_start < 0)
 	    negative_pulse_start = 0;				
@@ -174,9 +165,10 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 	    negative_pixels = negative_pulse_end - negative_pulse_start + 1;
     }
     else {
-	    negative_correlation_value = 0;
-	    negative_pixels = 0;
+      negative_correlation_value = 0;
+      negative_pixels = 0;
     }
+
 
     positive_pulse_center += period;
     
