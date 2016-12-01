@@ -19,7 +19,7 @@ public:
   
   
    
-    CropRowDetector(cv::Mat const);
+    CropRowDetector(cv::Mat&);
     cv::Mat detect(cv::Mat& intensity, cv::Mat& temp);
 
     int saturate(int val, int val_min, int val_max) {

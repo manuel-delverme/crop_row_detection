@@ -42,8 +42,8 @@ int main(int argc, char** argv){
     std::map<std::string, double> settings; // setup();
     settings["a0"] = 1.28;
     settings["b0"] = 4.48;
-    settings["width"] = 400;
-    settings["height"] = 300;
+    settings["width"] = 200;
+    settings["height"] = 150;
 
     ImagePreprocessor preprocessor (argv[1], cv::Size((int) settings["width"], (int) settings["height"]));
     std::vector<cv::Mat> data = preprocessor.process();
@@ -51,7 +51,7 @@ int main(int argc, char** argv){
 
     
     // vvv this is from cfg file
-    int d_min = 8;
+    int d_min = (8.f/400.f)*settings["width"];
     int n_samples_per_octave = 70;
     int n_octaves = 5;
 

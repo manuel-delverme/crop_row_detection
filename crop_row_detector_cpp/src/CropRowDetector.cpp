@@ -12,17 +12,20 @@
 
 using namespace std;
 
-CropRowDetector::CropRowDetector(cv::Mat const intensity_map) {
+CropRowDetector::CropRowDetector(cv::Mat& intensity_map) {
 
 
 
     cv::Mat intensity_map_64f;
-    intensity_map.convertTo(intensity_map_64f, CV_64F);
+    //intensity_map.convertTo(intensity_map_64f, CV_64F);
     m_integral_image = cv::Mat::zeros( intensity_map.size(), CV_64F );
 
     for(int row = 0; row < intensity_map.rows; row++) {
-        for (int column = 1; column < intensity_map.cols; column++)
-            m_integral_image.at<double>(row,column) = (double)intensity_map.at<uchar>(row,column) + m_integral_image.at<double>(row,column-1);
+        uchar* int_ptr = intensity_map.ptr<uchar>(row);
+	double* integral_ptr = m_integral_image.ptr<double>(row);
+	int_ptr++; integral_ptr++;
+        for (int column = 1; column < intensity_map.cols; column++, int_ptr++, integral_ptr++)
+            *integral_ptr = (double)*int_ptr + m_integral_image.at<double>(row,column-1);
     }
     
     period_scale_factor = .125;

@@ -7,6 +7,8 @@
 #include <opencv2/opencv.hpp>
 #include "ImagePreprocessor.h"
 
+#include <ctime>
+
 ImagePreprocessor::ImagePreprocessor(std::string images_path, cv::Size target_size){
     m_size = target_size;
     m_images_folder = images_path;
@@ -26,14 +28,18 @@ cv::Mat ImagePreprocessor::convertToExG(cv::Mat &image){
           
     double blueNorm, greenNorm, redNorm;
     double blue, green, red;
-    double sumNorm, ExG;
+    double sumNorm, ExG;   
     
     for( int c = 0; c < bgr[0].rows; c++) {
-      for( int r = 0; r < bgr[0].cols; r++) {
+      uchar* blue_ptr = bgr[0].ptr<uchar>(c);
+      uchar* green_ptr = bgr[1].ptr<uchar>(c);
+      uchar* red_ptr = bgr[2].ptr<uchar>(c);
+      uchar* intensity_ptr = intensity.ptr<uchar>(c);
+      for( int r = 0; r < bgr[0].cols; r++, blue_ptr++, green_ptr++, red_ptr++, intensity_ptr++) {
 		//normalize all pixels with max value of every channel
-		blueNorm = (double) bgr[0].at<uchar>(c,r) / blueMax;
-		greenNorm = (double) bgr[1].at<uchar>(c,r) / greenMax;
-		redNorm = (double) bgr[2].at<uchar>(c,r) / redMax;
+		blueNorm = (double) *blue_ptr / blueMax;
+		greenNorm = (double) *green_ptr / greenMax;
+		redNorm = (double) *red_ptr / redMax;
 
 		sumNorm = blueNorm + greenNorm + redNorm;
 
@@ -44,13 +50,14 @@ cv::Mat ImagePreprocessor::convertToExG(cv::Mat &image){
 
 		ExG = ((2*green - blue - red) > 0) ? (2*green - blue - red)*255.0 : 0;
 
-		intensity.at<uchar>(c,r) = (unsigned char) ExG;
+		*intensity_ptr = (unsigned char) ExG;
 
       }
     }
-      
+
     return intensity;
-};
+}
+
 std::vector<cv::Mat> ImagePreprocessor::process(){
     std::vector<cv::Mat> images;
     cv::String path(m_images_folder + "*"); //select only jpg
@@ -62,10 +69,43 @@ std::vector<cv::Mat> ImagePreprocessor::process(){
         cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
         // if (im.empty()) continue; //only proceed if
         cv::Mat resized_image;
-        cv::resize(image, resized_image, m_size); // settings["image_size"]);
+        cv::resize(image, resized_image, cv::Size(400,300));//m_size); // settings["image_size"]);        
+        
         cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
 	
-        images.push_back(intensity);
+	cv::Mat down_ExG_;
+	down_ExG_ = cv::Mat::zeros(cv::Size( intensity.cols/2, intensity.rows/2), intensity.type());
+	
+	std::cout << intensity.size() << " " << down_ExG_.size() << std::endl;
+	
+	// Downsampling ottimo
+	for(int row = 0; row < intensity.rows/2; row++) {
+	  for (int column = 0; column < intensity.cols/2; column++)  {
+	    
+	      int max = intensity.at<uchar>((row-1)*2,(column-1)*2);
+	      if(intensity.at<uchar>((row-1)*2+1,(column-1)*2) > max )
+		max = intensity.at<uchar>((row-1)*2+1,(column-1)*2);
+	      if(intensity.at<uchar>((row-1)*2,(column-1)*2+1) > max )
+		max = intensity.at<uchar>((row-1)*2,(column-1)*2+1);
+	      if(intensity.at<uchar>((row-1)*2+1,(column-1)*2+1) > max )
+		max = intensity.at<uchar>((row-1)*2+1,(column-1)*2+1);
+	      
+	      down_ExG_.at<uchar>(row,column) = max;
+	    }
+	    
+	  }
+	  
+	  /*cv::Mat temp;
+	  cv::resize(intensity, temp, cv::Size( intensity.cols/2, intensity.rows/2));
+	  
+	  cv::imshow(" exg",intensity);
+	  cv::imshow("downsampled exg",down_ExG_-temp);
+	  //cv::imshow("downsampled normal", temp);
+	  cv::waitKey(0);*/
+	  
+	  //images.push_back(intensity);
+	  images.push_back(down_ExG_);
+       
     }
     return images;
 }
