@@ -82,7 +82,7 @@ int main(int argc, char** argv){
             int phase = x.first;
             int period = x.second;
             int center_of_image = (int) std::round(settings["width"] / 2);
-            std::cout << image_row_num << " " << phase << "," << period << std::endl;
+            //std::cout << image_row_num << " " << phase << "," << period << std::endl;
             int column = center_of_image + phase;
             while(column < image_width) {
                 cv::Vec3b &pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);

@@ -26,15 +26,15 @@ public:
             return std::max(std::min(val, val_max), val_min);
     }
     std::vector<std::pair<int, int>> template_matching(const cv::Mat& Intensity,
-                                                       int d_min,int n_samples_per_octave,int n_octaves,
-                                                       double positive_pulse_width, double negative_pulse_width,
-                                                       int window_width);
+                                                       const int& d_min, const int& n_samples_per_octave,const int& n_octaves,
+                                                       const double& positive_pulse_width, const double& negative_pulse_width,
+                                                       const int& window_width);
     
     // std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<int> f);
-    double CrossCorrelation(int row_number, std::pair<int, int> template_var_param, double positive_pulse_width,
-                            double negative_pulse_width, int image_width);
+    double CrossCorrelation(const int& row_number, const std::pair<int, int>& template_var_param, const double& positive_pulse_width,
+                            const double& negative_pulse_width, const int& image_width);
 private:
     cv::Mat m_integral_image;
-    double cumulative_sum(int v, int start);
+    double inline cumulative_sum(const int& v, const int& start);
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H

@@ -65,12 +65,12 @@ cv::Mat CropRowDetector::detect(cv::Mat& intensity, cv::Mat& templ){
  * */
 std::vector<std::pair<int, int>> CropRowDetector::template_matching(
         const cv::Mat& Intensity,
-        int d_min,
-        int n_samples_per_octave,
-        int n_octaves,
-        double positive_pulse_width,
-        double negative_pulse_width,
-        int window_width // w
+        const int& d_min,
+        const int& n_samples_per_octave,
+        const int& n_octaves,
+        const double& positive_pulse_width,
+        const double& negative_pulse_width,
+        const int& window_width // w
 ) {
     std::pair<int, int> best_pair;
     int image_height = Intensity.size[0];
@@ -110,11 +110,9 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
     }
     return best_pairs;
 }
-double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> template_var_param,
-                                         double positive_pulse_width, double negative_pulse_width,
-                                         int image_width){
-
-    
+double CropRowDetector::CrossCorrelation (const int& row_number, const std::pair<int, int>& template_var_param, 
+					  const double& positive_pulse_width, const double& negative_pulse_width,
+					  const int& image_width){
 
     double phase = template_var_param.first;
     double period = template_var_param.second;
@@ -229,36 +227,6 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 
 
 
-double CropRowDetector::cumulative_sum(int v, int start) {
+double inline CropRowDetector::cumulative_sum(const int& v, const int& start) {
     return m_integral_image.at<double>(v, start);
 }
-
-/*
-std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<int> f, X, h, x){
-    for(int v=0; v < h; v++){
-        f_max[v] = std::max(f[v]);
-        for(std::pair<int, int> x: X){
-            if(f_max[v] >= f_low){
-                D[v][x] = min( (1-f[v][x]) / f_max[v], D_max);
-            } else {
-                D[v][x] = D_max;
-            }
-            if(v != 0){
-                B[v][x] = D[v][x] + U[v-1][x];
-            } else{
-                B[v][x] = D[v][x];
-            }
-        }
-        if(v < h-1){
-            for(std::pair<int, int> x: X) {
-                for(std::pair<int, int> x_prime: X) {
-                    U_prime[v][x][x_prime] = B[v][x_prime] + V(x, x_prime);
-                    T_prime[v][x] = B[v][x_prime] + V(x_prime, x);
-                }
-                U[v][x] = min(U_prime[v][x]);
-                T[v][x] = argmin(T_prime[v][x]);
-            }
-        }
-    }
-}
-*/
