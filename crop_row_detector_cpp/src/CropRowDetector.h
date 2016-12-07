@@ -35,7 +35,7 @@ public:
 private:
     cv::Mat m_integral_image;
     double cumulative_sum(int v, int start);
-    std::pair<int, int> find_optimal_x(std::vector<std::map<std::pair<int, int>, double>> energy_map, bool X,
-                                       bool num_rows, bool x, double f_low, double D_max);
+    std::vector<std::pair<int, int>> find_optimal_x(std::vector<std::map<std::pair<int, int>, double>> energy_map, bool X,
+                                                    bool num_rows, bool x, double f_low, double D_max);
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H

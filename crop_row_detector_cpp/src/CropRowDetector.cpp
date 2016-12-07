@@ -208,120 +208,17 @@ double CropRowDetector::cumulative_sum(int v, int start) {
     return m_integral_image.at<double>(v, start);
 }
 
-std::pair<int, int> CropRowDetector::find_optimal_x( std::vector<std::map<std::pair<int, int>, double>> energy_map,
+std::vector<std::pair<int, int>> CropRowDetector::find_optimal_x( std::vector<std::map<std::pair<int, int>, double>> energy_map,
         bool X, bool num_rows, bool x, double D_max, double f_low=1) {
 
+    std::vector<std::pair<int, int>> best_values;
     std::vector<double> max_energy;
     cv::Mat cost;
     for (int row_number = 0; row_number < num_rows; row_number++) {
         // max_energy[row_number] = std::max(energy.at<double>(row_number));
-
-        /*
-        for (std::pair<int, int> x: X) // 424 period_loop
-        {
-            for (int phase = -10; phase < 100; phase++) { // 428 phase loop
-                if (max_energy[row_number] >= f_low) {
-                    float cost = (1.0 - energy.at<double>(row_number, x)) / max_energy[row_number];
-                    cost.at<float>(row_number, x) = std::min(cost, D_max);
-                } else {
-                    cost[row_number][x] = D_max;
-                }
-                if (row_number > 0) {
-                    best[row_number][x] = cost[row_number][x] + U[row_number - 1][x];
-                } else {
-                    best[row_number][x] = cost[row_number][x]; // can be skipped by directly assigning to best
-                }
-            }
-            if (row_number < number_of_rows - 1) {  // 445
-                std::pair<int, int> old_x = X[0];
-                for (int period : periods){ // 449 period_loop
-                    // calc phase 0
-                    min_bv[x] = best[x];
-                    c[x] = -crange;
-                    period_index[x] = period_index;
-                    old_x = x;
-                    phase++;
-                    for(int phase; phase < crange; phase++) // 464
-                        minBV[this_x] = B[this_x];
-                        BV = min_bv[old_x] + m_lambda_d;
-                        if (min_bv[min_bv] <= BV) {
-                            c[x] = phase;
-                            period_index[x] = period_index;
-                        } else {
-                            minBV[x] = BV;
-                            c[x] = c[old_x];
-                            period_index[x] = period_index[old_x];
-                        }
-                        old_x = x;
-                    }
-                    for (; phase < m_number_phases; phase++, x++) { // 482
-                        minBV[x] = minBV[old_x] + m_lambda_d;
-                        c[x] = c[old_x];
-                        period_index[x] = period_index[old_x];
-                        old_x = x;
-                    }
-
-                    old_x = ptr_to_first_data_in_row + m_number_phases / 2 + crange - 1;
-                    x = p_old_x - 1;
-
-                    for (phase = crange - 2; phase >= -crange; phase--, x--) { // 495
-                        BV = minBV[old_x] + m_lambda_d;
-
-                        if (minBV[x] > BV) {
-                            // p_this_x->minBV = BV;
-                            minBV[x] = BV;
-                            c[x] = c[old_x];
-                        }
-                        old_x = x;
-                    }
-                    for (; phase >= -m_number_phases / 2; phase--, x--) { // 509
-                        minBV[x] = minBV[old_x] + m_lambda_d;
-                        c[x] = c[old_x];
-                        period_index[x] = period_index[old_x];
-
-                        old_x = x;
-                    }
-                }
-                // reset the pointer
-                // ptr_to_first_data_in_row = DP_;
-
-                for (phase = 0; phase < m_number_phases; phase++, ptr_to_first_data_in_row++) { // 522
-                    p_old_x = ptr_to_first_data_in_row;
-
-                    p_this_x = p_old_x + m_number_phases;
-
-                    for (period_index = 1; period_index < m_num_periods; id++, p_this_x += m_number_phases) { // 528
-                        BV = p_old_x->minBV + m_lambdad;
-
-                        if (p_this_x->minBV > BV) { // 532
-                            p_this_x->minBV = BV;
-                            p_this_x->c = p_old_x->c;
-                            p_this_x->period_index = p_old_x->period_index;
-                        }
-
-                        p_old_x = p_this_x;
-                    }
-
-                    p_old_x = ptr_to_first_data_in_row + (m_num_periods - 1) * m_number_phases;
-
-                    p_this_x = p_old_x - m_number_phases;
-
-                    for (period_index = m_num_periods - 2; period_index >= 0; period_index--, p_this_x -= m_number_phases) { // 546
-                        BV = p_old_x->minBV + m_lambdad;
-
-                        if (p_this_x->minBV > BV) { // 550
-                            p_this_x->minBV = BV;
-                            p_this_x->c = p_old_x->c;
-                            p_this_x->period_index = p_old_x->period_index;
-                        }
-
-                        p_old_x = p_this_x;
-                        crange = crange_[period_index];
-                }    // for(c = 0; c < m_nc; c++, DP_++)
-                */
-
         int rightmost_parabola;
 
+        /*
         // TODO to be defined with real variables
         auto parab_center;
         auto intersection_point;
@@ -465,5 +362,7 @@ std::pair<int, int> CropRowDetector::find_optimal_x( std::vector<std::map<std::p
                 period_indexes[x] = last_parabola_center;
             }
         }
+         */
     }
+    return best_values;
 }

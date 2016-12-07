@@ -60,12 +60,15 @@ std::vector<cv::Mat> ImagePreprocessor::process(){
     for (std::string file_path : file_names)
     {
         cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
-        // if (im.empty()) continue; //only proceed if
+        if (image.empty()){
+            std::cout << "image: " << file_path << " was empty" << std::endl;
+            continue; //only proceed if
+        }
+        cv::Mat intensity = ImagePreprocessor::convertToExG(image);
         cv::Mat resized_image;
-        cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
-        cv::resize(image, resized_image, m_size); // settings["image_size"]);
+        cv::resize(intensity, resized_image, m_size); // settings["image_size"]);
 
-        images.push_back(intensity);
+        images.push_back(resized_image);
     }
     return images;
 }

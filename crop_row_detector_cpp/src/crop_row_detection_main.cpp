@@ -64,7 +64,8 @@ vector<pair<int, int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves
         period = (d_min * pow(2, (double) sample_number / (double) n_samples_per_octave));
         int half_band = (int) round(0.5 * period);
         for (int phase = -half_band; phase < half_band; phase++) {
-            x = std::make_pair(phase, period);
+            x = std::make_pair(phase, (int) period);
+            Xs.push_back(x);
         }
     }
     return Xs;
