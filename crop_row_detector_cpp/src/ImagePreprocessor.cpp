@@ -62,9 +62,9 @@ std::vector<cv::Mat> ImagePreprocessor::process(){
         cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
         // if (im.empty()) continue; //only proceed if
         cv::Mat resized_image;
-        cv::resize(image, resized_image, m_size); // settings["image_size"]);
         cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
-	
+        cv::resize(image, resized_image, m_size); // settings["image_size"]);
+
         images.push_back(intensity);
     }
     return images;
