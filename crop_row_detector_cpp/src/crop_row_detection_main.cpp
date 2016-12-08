@@ -8,9 +8,12 @@
 // #include <opencv3/imgproc/imgproc.hpp>
 
 #include <opencv2/opencv.hpp>
-#include <opencv2/plot.hpp>
+// #include <opencv2/plot.hpp>
+#include <fstream>
 #include "ImagePreprocessor.h"
 #include "CropRowDetector.h"
+
+#define DEBUG 1
 
 
 using namespace std;
@@ -65,7 +68,7 @@ vector<pair<int, int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves
 
     int n_samples = (n_samples_per_octave * n_octaves);
     for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
-        period = (int) std::round(d_min * pow(2, (double) sample_number / (double) n_samples_per_octave));
+        period = (int) std::round(d_min * std::pow(2.f, (double) sample_number / (double) n_samples_per_octave));
         if(period == old_period){
             // skip if two periods are the same
             continue;
@@ -79,6 +82,47 @@ vector<pair<int, int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves
         }
     }
     return Xs;
+}
+
+vector<map<pair<int, int>, double>> load_match_results_from_csv() {
+    vector<map<pair<int, int>, double>> energy_map;
+    std::ifstream csv_stream("../energy_by_row.csv");
+    std::string row;
+
+    // drop header
+    std::getline(csv_stream, row);
+    std::cout << "read: " << row  << std::endl;
+
+    int row_number;
+    int old_row_number = -1;
+    double score;
+    int phase;
+    int period;
+    std::pair<int, int> x;
+
+    while(std::getline(csv_stream, row)){
+        std::stringstream ss(row);
+
+        ss >> row_number;
+        ss.ignore();
+        if(old_row_number != row_number){
+            old_row_number = row_number;
+            energy_map.push_back(std::map<std::pair<int, int>, double>());
+        }
+
+        ss >> score;
+        ss.ignore();
+
+        ss >> phase;
+        ss.ignore();
+
+        ss >> period;
+        x = std::make_pair<int, int>((int &&) phase, (int &&) period);
+        energy_map.at(row_number)[x] = score;
+
+        // std::cout<<row<<std::endl;
+    }
+    return energy_map;
 }
 
 /*
@@ -105,29 +149,32 @@ int main(int argc, char** argv){
     settings["b0"] = 4.48;
     settings["width"] = 400;
     settings["height"] = 300;
-
-    cv::Size image_size = cv::Size((int) settings["width"], (int) settings["height"]);
-    ImagePreprocessor preprocessor (argv[1], image_size);
-    std::vector<cv::Mat> data = preprocessor.process();
-    //TODO test results against paper-generated
-
-    
     // vvv this is from cfg file
     int d_min = 8;
     int n_samples_per_octave = 70;
     int n_octaves = 5;
 
+    cv::Size image_size = cv::Size((int) settings["width"], (int) settings["height"]);
+
+    ImagePreprocessor preprocessor (argv[1], image_size);
+
+
     CropRowDetector row_detector = CropRowDetector();
     vector<pair<int, int>> Xs = get_Xs(d_min, n_samples_per_octave, n_octaves);
     std::vector<std::map<std::pair<int, int>, double>> energy_map((unsigned long) image_size.height);
+    std::vector<cv::Mat> data = preprocessor.process();
 
     for (cv::Mat& pIntensityImg : data) {
+
+#if DEBUG
+        energy_map = load_match_results_from_csv();
+#else
         row_detector.load(pIntensityImg);
-        // why would i need with when i have the image, TODO REMOVEME ?
         std::vector<std::pair<int, int>> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs,
                                                                                         settings["a0"], settings["b0"],
                                                                                         (int) settings["width"]);
         plot_template_matching(pIntensityImg, match_results);
+#endif
         std::vector<std::pair<int, int>> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
 
     }
