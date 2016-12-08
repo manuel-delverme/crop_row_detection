@@ -12,7 +12,9 @@
 #include "ImagePreprocessor.h"
 #include "CropRowDetector.h"
 
+
 using namespace std;
+vector<pair<int, int>> find_best_parameters(vector<map<pair<int, int>, double>> vector);
 
 void display_img(cv::Mat image){
     cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
@@ -55,16 +57,24 @@ void plot_template_matching(const cv::Mat &pIntensityImg,
 }
 
 vector<pair<int, int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves) {
-    double period = 0;
     pair<int, int> x;
     vector<pair<int,int>> Xs;
 
+    int period = 0;
+    int old_period = 0;
+
     int n_samples = (n_samples_per_octave * n_octaves);
     for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
-        period = (d_min * pow(2, (double) sample_number / (double) n_samples_per_octave));
+        period = (int) std::round(d_min * pow(2, (double) sample_number / (double) n_samples_per_octave));
+        if(period == old_period){
+            // skip if two periods are the same
+            continue;
+        }
+        old_period = period;
+
         int half_band = (int) round(0.5 * period);
         for (int phase = -half_band; phase < half_band; phase++) {
-            x = std::make_pair(phase, (int) period);
+            x = std::make_pair(phase, period);
             Xs.push_back(x);
         }
     }
@@ -109,7 +119,7 @@ int main(int argc, char** argv){
 
     CropRowDetector row_detector = CropRowDetector();
     vector<pair<int, int>> Xs = get_Xs(d_min, n_samples_per_octave, n_octaves);
-    std::vector<std::map<std::pair<int, int>, double>> energy_map;
+    std::vector<std::map<std::pair<int, int>, double>> energy_map((unsigned long) image_size.height);
 
     for (cv::Mat& pIntensityImg : data) {
         row_detector.load(pIntensityImg);
@@ -118,9 +128,15 @@ int main(int argc, char** argv){
                                                                                         settings["a0"], settings["b0"],
                                                                                         (int) settings["width"]);
         plot_template_matching(pIntensityImg, match_results);
-        // std::vector<std::pair<int, int>> min_energy_results = find_best_parameters(energy_map);
+        std::vector<std::pair<int, int>> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
 
     }
     std::cout << "done" << std::endl;
     return 0;
 }
+
+/*
+vector<pair<int, int>> find_best_parameters(vector<map<pair<int, int>, double>> vector) {
+    return vector<pair<int, int>>();
+}
+ */

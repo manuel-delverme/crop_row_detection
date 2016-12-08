@@ -32,10 +32,12 @@ public:
     // std::pair<int, int> CropRowDetector::find_optimal_x(std::vector<int> f);
     double CrossCorrelation(int row_number, std::pair<int, int> template_var_param, double positive_pulse_width,
                             double negative_pulse_width, int image_width);
+
+    std::vector<std::pair<int, int>> find_best_parameters(std::vector<std::map<std::pair<int, int>, double>> vector,
+                                                          std::vector<std::pair<int, int>> vector1);
+
 private:
     cv::Mat m_integral_image;
     double cumulative_sum(int v, int start);
-    std::vector<std::pair<int, int>> find_optimal_x(std::vector<std::map<std::pair<int, int>, double>> energy_map, bool X,
-                                                    bool num_rows, bool x, double f_low, double D_max);
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
