@@ -34,7 +34,7 @@ public:
                             double negative_pulse_width, int image_width);
 
     std::vector<std::pair<int, int>> find_best_parameters(std::vector<std::map<std::pair<int, int>, double>> vector,
-                                                          std::vector<std::pair<int, int>> vector1);
+                                                          std::map<uint, std::vector<int>> vector1);
 
 private:
     cv::Mat m_integral_image;

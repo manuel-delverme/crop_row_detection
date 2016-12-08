@@ -59,27 +59,31 @@ void plot_template_matching(const cv::Mat &pIntensityImg,
     display_img(temp_image);
 }
 
-vector<pair<int, int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves) {
-    pair<int, int> x;
-    vector<pair<int,int>> Xs;
+map<uint, vector<int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves) {
+    map<uint, vector<int>> Xs;
+    vector<int> phases;
 
-    int period = 0;
-    int old_period = 0;
+    uint period = 0;
+    uint old_period = 0;
 
     int n_samples = (n_samples_per_octave * n_octaves);
     for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
-        period = (int) std::round(d_min * std::pow(2.f, (double) sample_number / (double) n_samples_per_octave));
+        phases.clear();
+
+        period = (uint) std::round(d_min * std::pow(2.f, (double) sample_number / (double) n_samples_per_octave));
         if(period == old_period){
             // skip if two periods are the same
             continue;
         }
         old_period = period;
-
         int half_band = (int) round(0.5 * period);
+
         for (int phase = -half_band; phase < half_band; phase++) {
-            x = std::make_pair(phase, period);
-            Xs.push_back(x);
+            // x = std::make_pair(phase, period);
+            phases.push_back(phase);
         }
+        assert(phases.size() % 2 == 0);
+        Xs[period] = phases;
     }
     return Xs;
 }
@@ -160,7 +164,7 @@ int main(int argc, char** argv){
 
 
     CropRowDetector row_detector = CropRowDetector();
-    vector<pair<int, int>> Xs = get_Xs(d_min, n_samples_per_octave, n_octaves);
+    map<uint, vector<int>> Xs = get_Xs(d_min, n_samples_per_octave, n_octaves);
     std::vector<std::map<std::pair<int, int>, double>> energy_map((unsigned long) image_size.height);
     std::vector<cv::Mat> data = preprocessor.process();
 

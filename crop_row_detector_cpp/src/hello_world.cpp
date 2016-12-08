@@ -1,4 +1,3 @@
-#include "RVLCore.h"
 #include "RVLCropRowDetector.h"
 #include "time.h"
 //#include "timer.h"
@@ -104,13 +103,13 @@ void CRVLCropRowDetector::Init(int h)
 	if(m_DPData)
 		delete[] m_DPData;
 
-	m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
+	number_of_periods = m_ndOctaves * m_ndSamplesPerOctave + 1;
 
 	m_dstep = pow(2.0, 1.0 / (double)m_ndSamplesPerOctave);
 
-	m_nc = (int)floor((double)m_mind * pow(m_dstep, m_nd)) + 1;
+	number_of_phases = (int)floor((double)m_mind * pow(m_dstep, number_of_periods)) + 1;
 
-	m_DPData = new RVLCRD_DPDATA[m_h * m_nd * m_nc];
+	m_DPData = new RVLCRD_DPDATA[m_h * number_of_periods * number_of_phases];
 
 	if(m_bestScore)
 		delete[] m_bestScore;
@@ -125,9 +124,9 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 	double halfw = (double)(w / 2);
 
-	int n = m_nc * m_nd;
+	int sizeof_row_data = number_of_phases * number_of_periods;
 
-	// assign score to each pair (c,d) for each image row
+	// assign score to each pair (phase,d) for each image row
 
 	int *II_ = new int[w + 1];
 
@@ -137,15 +136,15 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 	unsigned char *I_ = I;	
 
-	int *crange_ = new int[m_nd];
+	int *crange_ = new int[number_of_periods];
 
-	RVLCRD_DPDATA *DP_ = m_DPData;
+	RVLCRD_DPDATA *pointer_to_row_data = m_DPData;
 
-	int u, v;
-	int id;
-	int crange;
+	int u, row_number;
+	int index_of_phase;
+	int phase_range;
 	int kStart, kEnd;
-	int a, b, c;
+	int a, b, phase;
 	double d;
 	double halfa, halfb, halfd;
 	double fu, fub;
@@ -153,12 +152,12 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 	int u0, u1, u2, u3;
 	double Sa, Sb;
 	int na, nb;
-	int k;
+	int rightmost_parabola;
 	double score;
 	int bestid, bestc, bestd;
 	double fTmp;
 	double bestScore;
-	RVLCRD_DPDATA *DP__, *pDP, *pDP_;
+	RVLCRD_DPDATA *pointer_to_period_data, *pointer_to_tuple_data, *pDP_;
 	int c_position, crange2;
 
 	//start Template Matching timer
@@ -175,7 +174,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 	
 	//int debugCounter = 0;
 
-	for(v = 0; v < m_h; v++, I_ += w, DP_ += n)
+	for(row_number = 0; row_number < m_h; row_number++, I_ += w, pointer_to_row_data += sizeof_row_data)
 	{
 		// integral image of the row
 
@@ -194,17 +193,17 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 		d = (double)m_mind;
 
-		DP__ = DP_;
+		pointer_to_period_data = pointer_to_row_data;
 
-		for(id = 0; id < m_nd; id++, d *= m_dstep, DP__ += m_nc)
+		for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, d *= m_dstep, pointer_to_period_data += number_of_phases)
 		{
 #ifdef RVLCRD_DEBUG
 			if(d > 10.0 * debug)
 				debug++;
 #endif
-			crange = (int)floor(0.5 * d);
+			phase_range = (int)floor(0.5 * d);
 
-			crange_[id] = crange;
+			crange_[index_of_phase] = phase_range;
 
 			scale = d / fd0;
 			fTmp = floor(scale * fa0 + 0.5);
@@ -216,22 +215,22 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 			halfd = 0.5 * d;
 			fub =  halfd - halfb;
 
-			pDP = DP__ + m_nc / 2 - crange;
+			pointer_to_tuple_data = pointer_to_period_data + number_of_phases / 2 - phase_range;
 
-			//FOR score IMAGE (d x c)
+			//FOR score IMAGE (d x phase)
 			//if(v == 30)
 			//{
-			//	fprintf(fp, "\n");
-			//	fprintf(fp2, "%d\n", crange);
+			//	fprintf(fp, "\sizeof_row_data");
+			//	fprintf(fp2, "%d\sizeof_row_data", phase_range);
 			//}
 			//END IMAGE
 
-			for(c = -crange; c < crange; c++, pDP++)
+			for(phase = -phase_range; phase < phase_range; phase++, pointer_to_tuple_data++)
 			{
-				kStart = (int)floor((-(double)(w / 2 + c) + halfa) / d);
-				kEnd = (int)floor(((double)(w / 2 - c) + halfa) / d);
+				kStart = (int)floor((-(double)(w / 2 + phase) + halfa) / d);
+				kEnd = (int)floor(((double)(w / 2 - phase) + halfa) / d);
 
-				fu = (double)c + (double)kStart * d + halfw;
+				fu = (double)phase + (double)kStart * d + halfw;
 
 				u0 = DOUBLE2INT(fu - halfa);
 
@@ -269,7 +268,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 				fu += d;
 
-				for(k = kStart + 1; k < kEnd; k++, fu += d)
+				for(rightmost_parabola = kStart + 1; rightmost_parabola < kEnd; rightmost_parabola++, fu += d)
 				{
 					u0 = DOUBLE2INT(fu - halfa);
 
@@ -318,9 +317,9 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 				//score = (double)(nb * Sa - na * Sb) / (double)(na + nb);
 				score = (double)(nb * Sa - na * Sb) / (double)(na * nb);		// new score computation
 
-				pDP->D = score;
+				pointer_to_tuple_data->D = score;
 
-				//FOR score IMAGE (d x c)
+				//FOR score IMAGE (d x phase)
 				//if(v == 30)
 				//{
 				//	fprintf(fp, "%lf\t", score);
@@ -328,12 +327,12 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 				//END IMAGE
 
-				//copy D value for c values in range <-m_nc/2, m_nc/2>
-				crange2 = 2*crange;
-				pDP_ = pDP + crange2; //pDP_ pointer for copying D value in c range <-m_nc/2, m_nc/2>
-				c_position = m_nc*0.5 + c + crange2;
+				//copy D value for phase values in range <-m_nc/2, m_nc/2>
+				crange2 = 2*phase_range;
+				pDP_ = pointer_to_tuple_data + crange2; //pDP_ pointer for copying D value in phase range <-m_nc/2, m_nc/2>
+				c_position = number_of_phases*0.5 + phase + crange2;
 
-				while(c_position <= m_nc)
+				while(c_position <= number_of_phases)
 				{
 					pDP_->D = score;
 
@@ -341,8 +340,8 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					c_position += crange2;
 				}
 
-				pDP_ = pDP - crange2;
-				c_position = m_nc*0.5 + c - crange2;
+				pDP_ = pointer_to_tuple_data - crange2;
+				c_position = number_of_phases*0.5 + phase - crange2;
 
 				while(c_position >= 0)
 				{
@@ -355,18 +354,18 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 				if(score > bestScore)
 				{
 					bestScore = score;
-					bestc = c;
-					bestid = id;
+					bestc = phase;
+					bestid = index_of_phase;
 					bestd = d;
 				}
-			}	// for(c = -crange; c < crange; c++)
-		}	// for(id = 0; id < m_nd; id++, d *= m_dstep)
+			}	// for(phase = -phase_range; phase < phase_range; phase++)
+		}	// for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++, d *= m_dstep)
 
-		m_c[v] = bestc;
-		m_id[v] = bestid;
-		m_d[v] = bestd;
-		m_idFilter[v] = bestid;
-		m_bestScore[v] = bestScore;
+		m_c[row_number] = bestc;
+		m_id[row_number] = bestid;
+		m_d[row_number] = bestd;
+		m_idFilter[row_number] = bestid;
+		m_bestScore[row_number] = bestScore;
 	}	// for(v = 0; v < h; v++, I_ += w)
 
 	//fclose(fp);
@@ -387,18 +386,18 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 	// each block having m_nd rows and m_nc columns.
 	// Each block corresponds to an image row.
 
-	DP_ = m_DPData;	// DP_ - ptr. to the first data in a block
+	pointer_to_row_data = m_DPData;	// pointer_to_row_data - ptr. to the first data in a block
 
 #ifdef RVLCRD_L1
 	double BV;
 	RVLCRD_DPDATA *pDPPrev;	
 #else
-	int iTmp = RVLMAX(m_nc, m_nd) + 1;
+	int iTmp = RVLMAX(number_of_phases, number_of_periods) + 1;
 
-	int *v_ = new int[iTmp];
+	int *parab_center_period = new int[iTmp];
 	//NEW d_development
 	double *v__ = new double[iTmp];
-	double *z = new double[iTmp];
+	double *intersection_points = new double[iTmp];
 
 	//int64 debugCounter1 = 0;
 	//int64 debugCounter2 = 0;
@@ -416,258 +415,259 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 	//timer.Reset();
 	//timer.Start();
 
-	for(v = 0; v < m_h; v++, DP_ += n)
+	for(row_number = 0; row_number < m_h; row_number++, pointer_to_row_data += sizeof_row_data)
 	{
 #ifdef RVLCRD_DEBUG
 		if(v == 236)
 			int debug = 0;
 #endif
 
-		best_score_row_v = m_bestScore[v];
+		best_score_row_v = m_bestScore[row_number];
 
-		DP__ = DP_;		// DP__ - ptr. to the first data in a block row
+		pointer_to_period_data = pointer_to_row_data;		// pointer_to_period_data - ptr. to the first data in a block row
 
-		for(id = 0; id < m_nd; id++, DP__ += m_nc)
+		for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_period_data += number_of_phases)
 		{
-            //OLD crange
-			crange = crange_[id];
+            //OLD phase_range
+			phase_range = crange_[index_of_phase];
 
-			//pDP = DP__ + m_nc / 2 - crange;
-			pDP = DP__;
+			//pointer_to_tuple_data = pointer_to_period_data + m_nc / 2 - phase_range;
+			pointer_to_tuple_data = pointer_to_period_data;
 
-			//for(c = -crange; c < crange; c++, pDP++)
-			for(c = -m_nc/2; c < m_nc/2; c++, pDP++)
+			//for(phase = -phase_range; phase < phase_range; phase++, pointer_to_tuple_data++)
+			for(phase = -number_of_phases/2; phase < number_of_phases/2; phase++, pointer_to_tuple_data++)
 			{
 				if(best_score_row_v >= 1.0) // f_low
 				{
-					pDP->B = 1.0 - pDP->D / best_score_row_v;
+					pointer_to_tuple_data->B = 1.0 - pointer_to_tuple_data->D / best_score_row_v;
 
-					if(pDP->B > m_maxD)
-						pDP->B = m_maxD;
+					if(pointer_to_tuple_data->B > m_maxD)
+						pointer_to_tuple_data->B = m_maxD;
 				}
 				else
-					pDP->B = m_maxD;
+					pointer_to_tuple_data->B = m_maxD;
 				
-				if(v > 0)
-					pDP->B += (pDP - n)->minBV;
+				if(row_number > 0)
+					pointer_to_tuple_data->B += (pointer_to_tuple_data - sizeof_row_data)->minBV;
 			}
 		}
 
-		if(v < m_h - 1)
+		if(row_number < m_h - 1)
 		{
-			DP__ = DP_;
+			pointer_to_period_data = pointer_to_row_data;
 
 #ifdef RVLCRD_L1
                         std::cout << "sono qui" << std::endl;
-			for(id = 0; id < m_nd; id++, DP__ += m_nc)
+			for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++, pointer_to_period_data += m_nc)
 			{
-				crange = crange_[id];
+				phase_range = crange_[index_of_phase];
 
-				pDP = DP__ + m_nc / 2 - crange;
+				pointer_to_tuple_data = pointer_to_period_data + m_nc / 2 - phase_range;
 
-				pDP->minBV = pDP->B;
-				pDP->c = -crange;
-				pDP->id = id;
+				pointer_to_tuple_data->minBV = pointer_to_tuple_data->B;
+				pointer_to_tuple_data->phase = -phase_range;
+				pointer_to_tuple_data->index_of_phase = index_of_phase;
 
-				pDPPrev = pDP;
+				pDPPrev = pointer_to_tuple_data;
 
-				pDP++;
+				pointer_to_tuple_data++;
 
-				for(c = -crange + 1; c < crange; c++, pDP++)
+				for(phase = -phase_range + 1; phase < phase_range; phase++, pointer_to_tuple_data++)
 				{
-					pDP->minBV = pDP->B;
+					pointer_to_tuple_data->minBV = pointer_to_tuple_data->B;
 
 					BV = pDPPrev->minBV + m_lambdac;
 
-					if(pDP->minBV <= BV)
+					if(pointer_to_tuple_data->minBV <= BV)
 					{
-						pDP->c = c;
-						pDP->id = id;
+						pointer_to_tuple_data->phase = phase;
+						pointer_to_tuple_data->index_of_phase = index_of_phase;
 					}
 					else
 					{
-						pDP->minBV = BV;
-						pDP->c = pDPPrev->c;
-						pDP->id = pDPPrev->id;
+						pointer_to_tuple_data->minBV = BV;
+						pointer_to_tuple_data->phase = pDPPrev->phase;
+						pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
 					}
 
-					pDPPrev = pDP;
+					pDPPrev = pointer_to_tuple_data;
 				}
 
-				for(; c < m_nc; c++, pDP++)
+				for(; phase < m_nc; phase++, pointer_to_tuple_data++)
 				{
-					pDP->minBV = pDPPrev->minBV + m_lambdac;
-					pDP->c = pDPPrev->c;
-					pDP->id = pDPPrev->id;
+					pointer_to_tuple_data->minBV = pDPPrev->minBV + m_lambdac;
+					pointer_to_tuple_data->phase = pDPPrev->phase;
+					pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
 
-					pDPPrev = pDP;
+					pDPPrev = pointer_to_tuple_data;
 				}
 
-				pDPPrev = DP__ + m_nc / 2 + crange - 1;
+				pDPPrev = pointer_to_period_data + m_nc / 2 + phase_range - 1;
 
-				pDP = pDPPrev - 1;
+				pointer_to_tuple_data = pDPPrev - 1;
 
-				for(c = crange - 2; c >= -crange; c--, pDP--)
+				for(phase = phase_range - 2; phase >= -phase_range; phase--, pointer_to_tuple_data--)
 				{
 					BV = pDPPrev->minBV + m_lambdac;
 
-					if(pDP->minBV > BV)
+					if(pointer_to_tuple_data->minBV > BV)
 					{
-						pDP->minBV = BV;
-						pDP->c = pDPPrev->c;
+						pointer_to_tuple_data->minBV = BV;
+						pointer_to_tuple_data->phase = pDPPrev->phase;
 					}
 
-					pDPPrev = pDP;
+					pDPPrev = pointer_to_tuple_data;
 				}
 
-				for(; c >= -m_nc/2; c--, pDP--)
+				for(; phase >= -m_nc/2; phase--, pointer_to_tuple_data--)
 				{
-					pDP->minBV = pDPPrev->minBV + m_lambdac;
-					pDP->c = pDPPrev->c;
-					pDP->id = pDPPrev->id;
+					pointer_to_tuple_data->minBV = pDPPrev->minBV + m_lambdac;
+					pointer_to_tuple_data->phase = pDPPrev->phase;
+					pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
 
-					pDPPrev = pDP;
+					pDPPrev = pointer_to_tuple_data;
 				}
-			}	// for(id = 0; id < m_nd; id++)
+			}	// for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++)
 
-			DP__ = DP_;
+			pointer_to_period_data = pointer_to_row_data;
 
-			for(c = 0; c < m_nc; c++, DP__++)
+			for(phase = 0; phase < m_nc; phase++, pointer_to_period_data++)
 			{
-				pDPPrev = DP__;
+				pDPPrev = pointer_to_period_data;
 
-				pDP = pDPPrev + m_nc;
+				pointer_to_tuple_data = pDPPrev + m_nc;
 
-				for(id = 1; id < m_nd; id++, pDP += m_nc)
+				for(index_of_phase = 1; index_of_phase < m_nd; index_of_phase++, pointer_to_tuple_data += m_nc)
 				{
 					BV = pDPPrev->minBV + m_lambdad;
 
-					if(pDP->minBV > BV)
+					if(pointer_to_tuple_data->minBV > BV)
 					{
-						pDP->minBV = BV;
-						pDP->c = pDPPrev->c;
-						pDP->id = pDPPrev->id;
+						pointer_to_tuple_data->minBV = BV;
+						pointer_to_tuple_data->phase = pDPPrev->phase;
+						pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
 					}
 
-					pDPPrev = pDP;
+					pDPPrev = pointer_to_tuple_data;
 				}
 
-				pDPPrev = DP__ + (m_nd - 1) * m_nc;
+				pDPPrev = pointer_to_period_data + (m_nd - 1) * m_nc;
 
-				pDP = pDPPrev - m_nc;
+				pointer_to_tuple_data = pDPPrev - m_nc;
 
-				for(id = m_nd - 2; id >= 0; id--, pDP -= m_nc)
+				for(index_of_phase = m_nd - 2; index_of_phase >= 0; index_of_phase--, pointer_to_tuple_data -= m_nc)
 				{
 					BV = pDPPrev->minBV + m_lambdad;
 
-					if(pDP->minBV > BV)
+					if(pointer_to_tuple_data->minBV > BV)
 					{
-						pDP->minBV = BV;
-						pDP->c = pDPPrev->c;
-						pDP->id = pDPPrev->id;
+						pointer_to_tuple_data->minBV = BV;
+						pointer_to_tuple_data->phase = pDPPrev->phase;
+						pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
 					}
 
-					pDPPrev = pDP;
+					pDPPrev = pointer_to_tuple_data;
 				}
-			}	// for(c = 0; c < m_nc; c++, DP_++)	
+			}	// for(phase = 0; phase < m_nc; phase++, pointer_to_row_data++)
 #else
-			maxz = (1.0 + m_lambdac * (double)(m_nc * m_nc)) / (2.0 * m_lambdac);
+			maxz = (1.0 + m_lambdac * (double)(number_of_phases * number_of_phases)) / (2.0 * m_lambdac);
 
-			for(id = 0; id < m_nd; id++, DP__ += m_nc)
+			for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_period_data += number_of_phases)
 			{
 #ifdef RVLCRD_DEBUG
-				if(id == 186)
+				if(index_of_phase == 186)
 					int debug = 0;
 #endif
-				crange = crange_[id];
+				phase_range = crange_[index_of_phase];
 
 				// felzenszwalb_TC12	RVL
 				// ============================================
-				// k					k
-				// v					v_
-				// z					z
-				// q					c
+				// rightmost_parabola					rightmost_parabola
+				// v					parab_center_period
+				// intersection_points					intersection_points
+				// q					phase
 				// s					s
-				// f(q)					pDP->B
-				// f(v(k))				DP__[v_[k]+m_nc/2].B
+				// f(q)					pointer_to_tuple_data->B
+				// f(v(rightmost_parabola))				pointer_to_period_data[parab_center_period[rightmost_parabola]+m_nc/2].B
 
-				k = 0;
-				//OLD crange
-				//v_[0] = -crange;
-				v_[0] = -m_nc*0.5;
-				z[0] = -maxz;
-				z[1] = maxz;
+				rightmost_parabola = 0;
+				//OLD phase_range
+				//parab_center_period[0] = -phase_range;
+				parab_center_period[0] = -number_of_phases*0.5;
+				intersection_points[0] = -maxz;
+				intersection_points[1] = maxz;
 
-				//OLD crange
-				//pDP = DP__ + m_nc / 2 - crange + 1;
-				pDP = DP__ + 1;
+				//OLD phase_range
+				//pointer_to_tuple_data = pointer_to_period_data + m_nc / 2 - phase_range + 1;
+				pointer_to_tuple_data = pointer_to_period_data + 1;
 
-				//for(c = -crange + 1; c < crange; c++, pDP++)
-				for(c = -m_nc/2 + 1; c < m_nc/2; c++, pDP++)
+				//for(phase = -phase_range + 1; phase < phase_range; phase++, pointer_to_tuple_data++)
+				for(phase = -number_of_phases/2 + 1; phase < number_of_phases/2; phase++, pointer_to_tuple_data++)
 				{
 					while(true)
 					{
-						s = ((pDP->B + m_lambdac * (double)(c * c)) - (DP__[v_[k] + m_nc / 2].B + m_lambdac * (double)(v_[k] * v_[k]))) /
-							(2.0 * m_lambdac * (double)(c - v_[k]));
+						s = ((pointer_to_tuple_data->B + m_lambdac * (double)(phase * phase)) -
+								(pointer_to_period_data[parab_center_period[rightmost_parabola] + number_of_phases / 2].B + m_lambdac * (double)(parab_center_period[rightmost_parabola] * parab_center_period[rightmost_parabola]))) /
+							(2.0 * m_lambdac * (double)(phase - parab_center_period[rightmost_parabola]));
 
 						//debugCounter1++;
 
-						if(s <= z[k])
-							k--;
+						if(s <= intersection_points[rightmost_parabola])
+							rightmost_parabola--;
 						else
 							break;
 					}
 
-					k++;
+					rightmost_parabola++;
 
-					v_[k] = c;
-					z[k] = s;
-					z[k + 1] = maxz;
+					parab_center_period[rightmost_parabola] = phase;
+					intersection_points[rightmost_parabola] = s;
+					intersection_points[rightmost_parabola + 1] = maxz;
 				}
 
-				k = 0;
+				rightmost_parabola = 0;
 
-				pDP = DP__;
+				pointer_to_tuple_data = pointer_to_period_data;
 
-				for(c = -m_nc / 2; c < m_nc / 2; c++, pDP++)
+				for(phase = -number_of_phases / 2; phase < number_of_phases / 2; phase++, pointer_to_tuple_data++)
 				{
-					while(z[k + 1] < (double)c)
+					while(intersection_points[rightmost_parabola + 1] < (double)phase)
 					{
 						//debugCounter2++;
 
-						k++;
+						rightmost_parabola++;
 					}
 
-					iTmp = (c - v_[k]);
-					pDP->minBV = DP__[v_[k] + m_nc / 2].B + m_lambdac * (double)(iTmp * iTmp);
-					pDP->c = v_[k];
-					pDP->id = id;
+					iTmp = (phase - parab_center_period[rightmost_parabola]);
+					pointer_to_tuple_data->minBV = pointer_to_period_data[parab_center_period[rightmost_parabola] + number_of_phases / 2].B + m_lambdac * (double)(iTmp * iTmp);
+					pointer_to_tuple_data->c = parab_center_period[rightmost_parabola];
+					pointer_to_tuple_data->id = index_of_phase;
 				}
-			}	// for(id = 0; id < m_nd; id++)
+			}	// for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++)
 
-			maxz = (1.0 + m_lambdad * (double)(m_nd * m_nd)) / (2.0 * m_lambdad);
+			maxz = (1.0 + m_lambdad * (double)(number_of_periods * number_of_periods)) / (2.0 * m_lambdad);
 
-			DP__ = DP_;
+			pointer_to_period_data = pointer_to_row_data;
 
-			for(c = 0; c < m_nc; c++, DP__++)
+			for(phase = 0; phase < number_of_phases; phase++, pointer_to_period_data++)
 			{
 #ifdef RVLCRD_DEBUG
-				if(c == m_nc / 2)
+				if(phase == m_nc / 2)
 					int debug = 0;
 #endif
-				k = 0;
-				v_[0] = 0; //for saving id
+				rightmost_parabola = 0;
+				parab_center_period[0] = 0; //for saving index_of_phase
 				v__[0] = (double)m_mind; //for saving d
-				z[0] = -maxz;
-				z[1] = maxz;
+				intersection_points[0] = -maxz;
+				intersection_points[1] = maxz;
 
-				pDP = DP__ + m_nc;
+				pointer_to_tuple_data = pointer_to_period_data + number_of_phases;
 				
 				//NEW d_development
 				//d = (double)m_mind*m_dstep;
 				d = (double)m_mind;
 
-				for(id = 1; id < m_nd; id++, pDP += m_nc)
+				for(index_of_phase = 1; index_of_phase < number_of_periods; index_of_phase++, pointer_to_tuple_data += number_of_phases)
 				{
 					//NEW d_development
 					d *= m_dstep;
@@ -675,138 +675,138 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					while(true)
 					{
 						//OLD d
-						//s = ((pDP->minBV + m_lambdad * (double)(id * id)) - (DP__[m_nc * v_[k]].minBV + m_lambdad * (double)(v_[k] * v_[k]))) /
-						//	(2.0 * m_lambdad * (double)(id - v_[k]));
+						//s = ((pointer_to_tuple_data->minBV + m_lambdad * (double)(index_of_phase * index_of_phase)) - (pointer_to_period_data[m_nc * parab_center_period[rightmost_parabola]].minBV + m_lambdad * (double)(parab_center_period[rightmost_parabola] * parab_center_period[rightmost_parabola]))) /
+						//	(2.0 * m_lambdad * (double)(index_of_phase - parab_center_period[rightmost_parabola]));
 
-						s = ((pDP->minBV + m_lambdad * (double)(d * d)) - (DP__[m_nc * v_[k]].minBV + m_lambdad * (double)(v__[k] * v__[k]))) /
-							(2.0 * m_lambdad * (double)(d - v__[k]));
+						s = ((pointer_to_tuple_data->minBV + m_lambdad * (double)(d * d)) - (pointer_to_period_data[number_of_phases * parab_center_period[rightmost_parabola]].minBV + m_lambdad * (double)(v__[rightmost_parabola] * v__[rightmost_parabola]))) /
+							(2.0 * m_lambdad * (double)(d - v__[rightmost_parabola]));
 
 						//debugCounter3++;
 
-						if(s <= z[k])
-							k--;
+						if(s <= intersection_points[rightmost_parabola])
+							rightmost_parabola--;
 						else
 							break;
 					}
 
-					k++;
+					rightmost_parabola++;
 
 					//NEW d_development
-					v_[k] = id;
-					v__[k] = d;
+					parab_center_period[rightmost_parabola] = index_of_phase;
+					v__[rightmost_parabola] = d;
 
-					z[k] = s;
-					z[k + 1] = maxz;					
+					intersection_points[rightmost_parabola] = s;
+					intersection_points[rightmost_parabola + 1] = maxz;
 				}
 
-				k = 0;
+				rightmost_parabola = 0;
 
-				pDP = DP__;
+				pointer_to_tuple_data = pointer_to_period_data;
 
 				//NEW d_development
 				d = (double)m_mind;
 
-				for(id = 0; id < m_nd; id++, pDP += m_nc)
+				for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_tuple_data += number_of_phases)
 				{
 					//NEW d_development
-					//while(z[k + 1] < (double)id)
-					while(z[k + 1] < d)
+					//while(intersection_points[rightmost_parabola + 1] < (double)index_of_phase)
+					while(intersection_points[rightmost_parabola + 1] < d)
 					{
 						//debugCounter4++;
 
-						k++;
+						rightmost_parabola++;
 					}
 
-					//iTmp = (id - v_[k]);
-					iTmp = (d - v__[k]);
+					//iTmp = (index_of_phase - parab_center_period[rightmost_parabola]);
+					iTmp = (d - v__[rightmost_parabola]);
 
-					pDP->minBV = DP__[m_nc * v_[k]].minBV + (m_lambdad * (double)(iTmp * iTmp));
-					pDP->c = DP__[m_nc * v_[k]].c;
-					pDP->id = v_[k];
+					pointer_to_tuple_data->minBV = pointer_to_period_data[number_of_phases * parab_center_period[rightmost_parabola]].minBV + (m_lambdad * (double)(iTmp * iTmp));
+					pointer_to_tuple_data->c = pointer_to_period_data[number_of_phases * parab_center_period[rightmost_parabola]].c;
+					pointer_to_tuple_data->id = parab_center_period[rightmost_parabola];
 
 					//NEW d_development
 					d *= m_dstep;
 				}
-			}	//	for(c = 0; c < m_nc; c++)
+			}	//	for(phase = 0; phase < m_nc; phase++)
 #endif
 		}	// if(v < m_h - 1)
 
 #ifdef RVLCRD_DEBUG
-		pDP = DP_;
+		pointer_to_tuple_data = pointer_to_row_data;
 
-		for(id = 0; id < m_nd; id++)
-			for(c = 0; c < m_nc; c++, pDP++)
-				if(pDP->minBV < 0)
+		for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++)
+			for(phase = 0; phase < m_nc; phase++, pointer_to_tuple_data++)
+				if(pointer_to_tuple_data->minBV < 0)
 					int debug = 0;
 #endif
-	}	// for(v = 0; v < m_h - 1; v++, DP_ += n)
+	}	// for(v = 0; v < m_h - 1; v++, pointer_to_row_data += sizeof_row_data)
 
 #ifndef RVLCRD_L1
-	delete[] v_;
-	delete[] z;
+	delete[] parab_center_period;
+	delete[] intersection_points;
 #endif
 
-	DP_ = m_DPData + (m_h - 1) * n;
+	pointer_to_row_data = m_DPData + (m_h - 1) * sizeof_row_data;
 
-	DP__ = DP_;
+	pointer_to_period_data = pointer_to_row_data;
 
-	v = m_h - 1;
+	row_number = m_h - 1;
 
-	//OLD crange
-	//RVLCRD_DPDATA *pBestNode = DP__ + m_nc / 2 - crange_[0];
-	RVLCRD_DPDATA *pBestNode = DP__;
+	//OLD phase_range
+	//RVLCRD_DPDATA *pBestNode = pointer_to_period_data + m_nc / 2 - crange_[0];
+	RVLCRD_DPDATA *pBestNode = pointer_to_period_data;
 
 	//for saving best d
 	d = (double)m_mind;
 
-	for(id = 0; id < m_nd; id++, DP__ += m_nc, d *= m_dstep)
+	for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_period_data += number_of_phases, d *= m_dstep)
 	{
-		crange = crange_[id];
+		phase_range = crange_[index_of_phase];
 
-		//OLD crange
-		//pDP = DP__ + m_nc / 2 - crange;
-		pDP = DP__;
+		//OLD phase_range
+		//pointer_to_tuple_data = pointer_to_period_data + m_nc / 2 - phase_range;
+		pointer_to_tuple_data = pointer_to_period_data;
 
-		//for(c = -crange; c < crange; c++, pDP++)
-		for(c = -m_nc/2; c < m_nc/2; c++, pDP++)
-			if(pDP->B < pBestNode->B)
+		//for(phase = -phase_range; phase < phase_range; phase++, pointer_to_tuple_data++)
+		for(phase = -number_of_phases/2; phase < number_of_phases/2; phase++, pointer_to_tuple_data++)
+			if(pointer_to_tuple_data->B < pBestNode->B)
 			{
-				pBestNode = pDP;
-				bestc = c;
-				bestid = id;
+				pBestNode = pointer_to_tuple_data;
+				bestc = phase;
+				bestid = index_of_phase;
 				bestd = d;
 			}
 	}
 
-	m_c[v] = bestc;
-	m_id[v] = bestid;
-	m_d[v] = bestd;
+	m_c[row_number] = bestc;
+	m_id[row_number] = bestid;
+	m_d[row_number] = bestd;
 
 #ifdef RVLCRD_DEBUG
 	char name[40];
 	sprintf(name, "Image_ExG_%d.txt", imNum);
 	FILE *f = fopen(name, "w");
-	//fprintf(f, "v\tpDP->D\t\tpDP->B\t\tpDP->minBV\tpDP->c\tpDP->id\n");
-	//fprintf(f, "---------------------------------------------------------------------------------\n");
+	//fprintf(f, "v\tpDP->D\t\tpDP->B\t\tpDP->minBV\tpDP->phase\tpDP->index_of_phase\sizeof_row_data");
+	//fprintf(f, "---------------------------------------------------------------------------------\sizeof_row_data");
 #endif
 
 	m_visibleStart = 0;
 	m_visibleStop = 0;
 
-	for(v = m_h - 2; v >= 0; v--)
+	for(row_number = m_h - 2; row_number >= 0; row_number--)
 	{
-		pDP = pBestNode - n;
+		pointer_to_tuple_data = pBestNode - sizeof_row_data;
 
-		DP_ -= n;
+		pointer_to_row_data -= sizeof_row_data;
 
-		pBestNode = DP_ + pDP->id * m_nc + m_nc / 2 + pDP->c;
+		pBestNode = pointer_to_row_data + pointer_to_tuple_data->id * number_of_phases + number_of_phases / 2 + pointer_to_tuple_data->c;
 
-		m_c[v] = pDP->c;
-		m_id[v] = pDP->id;
-		m_d[v] = (double)m_mind * pow(m_dstep, (double)(m_id[v]));
+		m_c[row_number] = pointer_to_tuple_data->c;
+		m_id[row_number] = pointer_to_tuple_data->id;
+		m_d[row_number] = (double)m_mind * pow(m_dstep, (double)(m_id[row_number]));
 
 		/*if(abs(m_idFilter[v] - m_id[v]) < 3)
-		//if(pDP->D == m_bestScore[v])
+		//if(pointer_to_tuple_data->D == m_bestScore[v])
 		{
 			//m_visibleStart = v;
 			if(m_visibleStop == 0)
@@ -821,7 +821,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 		}*/
 
 #ifdef RVLCRD_DEBUG
-		fprintf(f, "%d\t%f\t%f\t%f\t%d\t%d\t%f\n", v,pDP->D,pDP->B,pDP->minBV,pDP->c,pDP->id,m_bestScore[v]);
+		fprintf(f, "%d\t%f\t%f\t%f\t%d\t%d\t%f\sizeof_row_data", v,pointer_to_tuple_data->D,pointer_to_tuple_data->B,pointer_to_tuple_data->minBV,pointer_to_tuple_data->phase,pointer_to_tuple_data->index_of_phase,m_bestScore[v]);
 #endif
 	}
 
