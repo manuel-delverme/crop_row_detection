@@ -132,27 +132,27 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     //cout << positive_pulse_center <<  " " << halfa << " " << positive_pulse_start << " " << positive_pulse_end << " " << negative_pulse_start << " " << negative_pulse_end << endl;
 
     if(positive_pulse_end >= 0) {
-	    positive_correlation_value = cumulative_sum(row_number, positive_pulse_end);
-	    positive_pixels = positive_pulse_end;
+        positive_correlation_value = cumulative_sum(row_number, positive_pulse_end);
+        positive_pixels = positive_pulse_end;
     }
     else {
-      positive_correlation_value = 0;
-      positive_pixels = 0;
+        positive_correlation_value = 0;
+        positive_pixels = 0;
     }
 
 
     if(negative_pulse_start < 0)
-	    negative_pulse_start = 0;
+        negative_pulse_start = 0;
 
     if(negative_pulse_end >= 0) {
-	    negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
-					-cumulative_sum(row_number, negative_pulse_start); //tolto  -cumulative_sum(row_number, negative_pulse_start-1);
+        negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
+                                     -cumulative_sum(row_number, negative_pulse_start); //tolto  -cumulative_sum(row_number, negative_pulse_start-1);
 
-	    negative_pixels = negative_pulse_end - negative_pulse_start + 1;
+        negative_pixels = negative_pulse_end - negative_pulse_start + 1;
     }
     else {
-      negative_correlation_value = 0;
-      negative_pixels = 0;
+        negative_correlation_value = 0;
+        negative_pixels = 0;
     }
 
 
@@ -163,21 +163,21 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
 
 
 
-	positive_pulse_start = (int) std::floor(positive_pulse_center - halfa);
-	positive_pulse_end = positive_pulse_start + a - 1;
+        positive_pulse_start = (int) std::floor(positive_pulse_center - halfa);
+        positive_pulse_end = positive_pulse_start + a - 1;
 
-	positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
+        positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
                                       - cumulative_sum(row_number, positive_pulse_start-1);
 
-	positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
+        positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
 
-	negative_pulse_start = (int) std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
-	negative_pulse_end = negative_pulse_start + b - 1;
+        negative_pulse_start = (int) std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
+        negative_pulse_end = negative_pulse_start + b - 1;
 
-	negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
+        negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
                                       -cumulative_sum(row_number, negative_pulse_start-1);
 
-	negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
+        negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
     }
 
     positive_pulse_start = (int) std::floor(positive_pulse_center - halfa);
@@ -185,7 +185,7 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     positive_pulse_end = positive_pulse_start + a - 1;
 
     if(positive_pulse_end >= image_width)
-	    positive_pulse_end = image_width - 1;
+        positive_pulse_end = image_width - 1;
 
     positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
                                   -cumulative_sum(row_number, positive_pulse_start-1);
@@ -196,15 +196,15 @@ double CropRowDetector::CrossCorrelation(int row_number, std::pair<int, int> tem
     negative_pulse_start = (int) std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
     if(negative_pulse_start < image_width)
     {
-	    negative_pulse_end = negative_pulse_start + b - 1;
+        negative_pulse_end = negative_pulse_start + b - 1;
 
-	    if(negative_pulse_end >= image_width)
-		    negative_pulse_end = image_width - 1;
+        if(negative_pulse_end >= image_width)
+            negative_pulse_end = image_width - 1;
 
-	    negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
+        negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
                                       -cumulative_sum(row_number, negative_pulse_start-1);
 
-	    negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
+        negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
     }
 
     return (negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) / (double)(positive_pixels * negative_pixels);
@@ -238,8 +238,12 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
     // int m_number_phases = 31;
 
     // int m_min_d = 13;
+    std::vector<double> parab_center_phase(Xs.size());
     std::vector<int> parab_center_period(Xs.size());
     std::vector<int> intersection_points(Xs.size());
+
+    std::vector<std::map<std::pair<int, int>, double>> minBV;
+    std::vector<std::map<std::pair<int, int>, double>> phases;
 
     for (uint row_number = 0; row_number < image_height; row_number++) {
         // max_energy[row_number] = std::max(energy.at<double>(row_number));
@@ -251,19 +255,9 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
         double left_term;
         double right_term;
         double normalizer;
-        double last_intersection;
+        int last_intersection;
         // best_score_in_row[row_number] = 1.337; // this comes from template_matching, best of this row
         double best_score_in_this_row = 1.337; // best_score_in_row[row_number];
-
-        // auto minBV;
-        // auto phases;
-        // auto period_indexes;
-        // auto iTmp;
-        // auto v_;
-        // auto v__;
-        // auto minBVs;
-        // auto cs;
-        // auto number_of_phases;
 
         // TODO explain
         normalizer = 1; // (2.0 * lambda_d * (period - v__[rightmost_parabola])); // why??
@@ -345,51 +339,59 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
             }
 
             rightmost_parabola = 0; // 615
-            // ptr_to_first_data_in_row_cloned = ptr_to_first_data_in_row;
 
-            for (int phase = phase_range_min; phase < phase_range_max; phase++) {
+            for(int phase: phases){
                 while (intersection_points[rightmost_parabola + 1] < (double) phase) {
                     rightmost_parabola++;
                 }
+                std::pair<int, uint> x = std::make_pair(phase, period);
 
                 double a = (phase - parab_center_period[rightmost_parabola]); // TODO name me
-
                 // TODO: not sure about these indexes
-                // minBV[period][phase] = best_score_in_row[parab_center_period[rightmost_parabola] + phase_range_max] + lambda_d * std::pow(a, 2);
-                // phases[period][phase] = parab_center_period[rightmost_parabola];
-                // period_indexes[period][phase] = period_index;
+                std::pair<int, uint> x_prime = std::make_pair(parab_center_period[rightmost_parabola] + max_phases, period);
+
+                minBV[row_number][x_prime] = energy_map[row_number][x_prime] + lambda_c * std::pow(a, 2);
+                phases[row_number][x_prime] = parab_center_period[rightmost_parabola];
+                // period_indexes[row_number][x] = period_index;
             }
         } // 633
         maxz = INT_MAX; // (1.0 + lambda_d * std::pow(m_num_periods, 2)) / (2.0 * lambda_d);
 
         int m_number_phases = 1337;
         // loop phases
-        for (int phase = 0; phase < m_number_phases; phase++) {
-            rightmost_parabola = 0;
-            parab_center_period[0] = 0;
-            // v__[0] = (double) d_min; //for saving d
-            intersection_points[0] = -maxz;
-            intersection_points[1] = maxz;
+        bool skip_first;
+        skip_first = true;
 
-            // x++ TODO: understand this
-            // ptr_to_first_data_in_row_cloned = ptr_to_first_data_in_row + m_number_phases;
-            // pDP = DP__ + m_nc;
+        for(std::pair<uint, std::vector<int>> const& item: Xs){
+            uint period = item.first;
+            std::vector<int> phases = item.second;
 
+            for(int phase: phases) {
+                // next period
+                if(skip_first){
+                    skip_first = false;
+                    continue;
+                }
 
-            // TODO: fix those vvv
-            // 657
+                rightmost_parabola = 0;
+                parab_center_period[0] = 0;
+                parab_center_phase[0] = (double) 1337.1; //min_d
+                intersection_points[0] = -maxz;
+                intersection_points[1] = maxz;
 
-            // period loop; start from the second period!
-            for (uint period = 1337 + 1; period < 31337; period++) {
-                // int last_intersection;
-                // double left_term;
-                // double right_term;
-                // double bottom_term;
+                // period loop; start from the second period!
 
                 while (true) {
-                    left_term = 1; // = (minBV[x] + lambda_d * std::pow(period, 2));
-                    right_term = 1; // = (minBV[number_of_phases * v_[rightmost_parabola]] + lambda_d * std::pow(v__[rightmost_parabola], 2));
-                    normalizer = 2; // = (2.0 * lambda_d * (period - v__[rightmost_parabola]));
+                    std::pair<int, uint> x = std::make_pair(phase, period);
+                    left_term = minBV[row_number][x] + lambda_d * std::pow(period, 2);
+
+                    std::pair<int, uint> x_prime = std::make_pair(0, parab_center_period[rightmost_parabola]);
+                    right_term = minBV[row_number][x_prime] + lambda_d * std::pow(parab_center_phase[rightmost_parabola], 2);
+
+                    normalizer = (2.0 * lambda_d * (period - parab_center_phase[rightmost_parabola]));
+
+                    // s = () - (pointer_to_period_data[number_of_phases * parab_center_period[rightmost_parabola]].minBV + m_lambdad * (double)(parab_center_phase[rightmost_parabola] * parab_center_phase[rightmost_parabola]))) /
+                    //     (2.0 * m_lambdad * (double)(d - parab_center_phase[rightmost_parabola]));
 
                     last_intersection = (int) ((left_term - right_term) / normalizer);
 
@@ -402,29 +404,41 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
                 rightmost_parabola++;
 
                 //NEW d_development
-                parab_center_period[rightmost_parabola] = period_index;
-                // v__[rightmost_parabola] = period;
+                parab_center_period[rightmost_parabola] = phase;
+                parab_center_phase[rightmost_parabola] = period;
 
                 intersection_points[rightmost_parabola] = last_intersection;
                 intersection_points[rightmost_parabola + 1] = maxz;
             }
-
-
             rightmost_parabola = 0;
-            for (uint period = 1337; period < 31337 ; period++) {
+            // reset phase
+            for(std::pair<uint, std::vector<int>> const& item: Xs){
+                uint period = item.first;
+                std::vector<int> phases = item.second;
+                for(int phase: phases) {
 
-                while (intersection_points[rightmost_parabola + 1] < period) {
-                    rightmost_parabola++;
+                    while (intersection_points[rightmost_parabola + 1] < period) {
+                        rightmost_parabola++;
+                    }
+
+                    uint iTmp = period - parab_center_period[rightmost_parabola];
+
+                    int last_parabola_center = parab_center_period[rightmost_parabola];
+                    int some_index = m_number_phases * last_parabola_center;
+
+                    std::pair<int, uint> x = std::make_pair(parab_center_period[rightmost_parabola] + max_phases, period);
+
+                    std::pair<int, uint> x_prime = std::make_pair(parab_center_period[rightmost_parabola] + max_phases, period);
+
+                    // idk about x, x_prime
+                    minBV[row_number][x] = minBV[row_number][x_prime] + lambda_d * std::pow(iTmp, 2);
+                    std::pair<int, uint> x_second = std::make_pair(phase, parab_center_period[rightmost_parabola]);
+                    _phases[row_number][x] = _phases[row_number][m_number_phases * last_parabola_center];
+                    _period_indexes[row_number][x] = parab_center_period[rightmost_parabola];
                 }
-
-                // iTmp = (period - v__[rightmost_parabola]);
-                int last_parabola_center = parab_center_period[rightmost_parabola];
-                int some_index = m_number_phases * last_parabola_center;
-                // minBVs[x] = minBVs[some_index] + lambda_d * std::pow(iTmp, 2);
-                // cs[x] = cs[m_number_phases * last_parabola_center];
-                // period_indexes[x] = last_parabola_center;
             }
         }
     }
-    return best_values;
+}
+return best_values;
 }
