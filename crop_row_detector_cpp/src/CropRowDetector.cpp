@@ -58,7 +58,8 @@ void CropRowDetector::load(cv::Mat const &intensity_map) {
 std::vector<std::pair<int, int>> CropRowDetector::template_matching(
         std::vector<std::map<std::pair<int, int>, double>>& energy_map,
         const cv::Mat& Intensity,
-        const std::vector<std::pair<int, int>> Xs,
+        // const std::vector<std::pair<int, int>> Xs,
+        std::map<uint, std::vector<int>> Xs,
         const double positive_pulse_width,
         const double negative_pulse_width,
         const int window_width // w
@@ -74,12 +75,18 @@ std::vector<std::pair<int, int>> CropRowDetector::template_matching(
 
     for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
         row_energy_map.clear();
-        for(std::pair<int, int> x: Xs){
-            energy = CrossCorrelation(image_row_num, x, positive_pulse_width, negative_pulse_width, window_width);
-            row_energy_map[x] = energy;
-            if(energy > best_energy){
-                best_energy = energy;
-                best_pair = x;
+        for(std::pair<uint, std::vector<int>> const& item: Xs){
+            uint period = item.first;
+            std::vector<int> phases = item.second;
+            for(int phase: phases) {
+                std::pair<uint, int> x = std::make_pair(phase, period);
+
+                energy = CrossCorrelation(image_row_num, x, positive_pulse_width, negative_pulse_width, window_width);
+                row_energy_map[x] = energy;
+                if (energy > best_energy) {
+                    best_energy = energy;
+                    best_pair = x;
+                }
             }
         }
         energy_map.push_back(row_energy_map);
