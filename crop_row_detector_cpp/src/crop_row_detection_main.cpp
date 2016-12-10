@@ -13,7 +13,7 @@
 #include "ImagePreprocessor.h"
 #include "CropRowDetector.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 
 using namespace std;
@@ -23,6 +23,9 @@ void display_img(cv::Mat image){
     cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     cv::imshow("Display Image", image);
     cv::waitKey(0);
+
+    // close the window
+    cv::destroyWindow("Display Image");
 }
 
 void plot_template_matching(const cv::Mat &pIntensityImg,

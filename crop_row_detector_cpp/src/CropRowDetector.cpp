@@ -239,15 +239,15 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
 
     // int m_min_d = 13;
     std::vector<double> parab_center_phase(Xs.size());
-    std::vector<int> parab_center_period(Xs.size());
+    std::vector<uint> v_period(Xs.size());
     std::vector<int> intersection_points(Xs.size());
 
-    std::vector<std::map<std::pair<int, int>, double>> minBV;
+    std::vector<std::map<std::pair<int, int>, double>> minBV = energy_map; // TODO check if deep cloned
     std::vector<std::map<std::pair<int, int>, double>> phases;
 
     for (uint row_number = 0; row_number < image_height; row_number++) {
         // max_energy[row_number] = std::max(energy.at<double>(row_number));
-        int rightmost_parabola;
+        int k;
 
         // int d_min = 8;
         int period_index;
@@ -260,7 +260,7 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
         double best_score_in_this_row = 1.337; // best_score_in_row[row_number];
 
         // TODO explain
-        normalizer = 1; // (2.0 * lambda_d * (period - v__[rightmost_parabola])); // why??
+        normalizer = 1; // (2.0 * lambda_d * (period - v__[k])); // why??
 
         // TODO explain
         // int maxz = (int) ((1.0 + lambda_d * std::pow(m_number_phases, 2)) / (2.0 * lambda_d));
@@ -287,72 +287,75 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
         for(std::pair<uint, std::vector<int>> const& item: Xs){
             uint period = item.first;
             std::vector<int> phases = item.second;
-            rightmost_parabola = 0;
+            k = 0;
 
             // set the first parabola
-            int phase_range_min = (int) -(phases.size() / 2);
-            int phase_range_max = (int) (phases.size() / 2);
+            uint phase_range_offset = (uint) std::floor(phases.size() / 2);
+            uint phase_range_max = (uint) (phases.size() - phase_range_offset);
+            int phase_range_min = -phase_range_offset;
 
-            parab_center_period[0] = phase_range_min; // left bound
+            // projection of parabola focus/vertex on the period
+            v_period[0] = 0; // left bound
+
             intersection_points[0] = minz; // -inf
             intersection_points[1] = maxz; // +inf
 
             // for the second parabola until the last
             // for (int phase = phase_range_min + 1; phase < phase_range_max; phase++) // 593
 
-            bool skip_one = true; // TODO find a better way
-            for(int phase: phases){
-
-                if(skip_one){
-                    skip_one = false;
-                    continue;
-                }
+            for (auto phase_iter=phases.begin() + 1; phase_iter != phases.end(); phase_iter++)
+            {
+                int phase = *phase_iter;
                 std::pair<int, uint> x = std::make_pair(phase, period);
+                uint q = phase + phase_range_offset;
+                std::cout << "x: " << x.first << ", " << x.second << std::endl;
+
                 while (true) {
-                    // find best phase
+                    double fq = energy_map[row_number][x];
+                    double q2 = lambda_c * std::pow(q, 2);
 
-                    // f(v(k))				DP__[v_[k]+m_nc/2].best_score_in_row
-                    left_term = (energy_map[row_number][x] + lambda_c * std::pow(phase, 2));
+                    std::pair<int, uint> x_vk = std::make_pair(v_period[k] - phase_range_offset, period);
+                    double fvk = energy_map[row_number][x_vk];
 
-                    uint phase_rightmost_index = (uint) (parab_center_period[rightmost_parabola] + phase_range_max);
-                    int phase_rightmost = phases[phase_rightmost_index];
-                    std::pair<int, uint> x_rightmost = std::make_pair(phase_rightmost, period);
-                    int rightmost_center = parab_center_period[rightmost_parabola];
-                    double energy_prime = energy_map[row_number][x_rightmost];
+                    double vk2 = lambda_c * std::pow(v_period[k], 2);
+                    normalizer = 2.0 * lambda_c * (q - v_period[k]);
 
-                    right_term = energy_prime + lambda_c * std::pow(rightmost_center, 2);
-                    normalizer = 2.0 * lambda_c * (phase - rightmost_center); // TODO 2.0 and labmda_c simplify out
+                    last_intersection = (int) (( (fq + q2) - (fvk + vk2) ) / normalizer);
+                    std::cout << "s: " << last_intersection << std::endl;
 
-                    last_intersection = (left_term - right_term) / normalizer;
-
-                    if (last_intersection <= intersection_points[rightmost_parabola])
-                        rightmost_parabola--; // overwrite the last one
-                    else
+                    if (last_intersection <= intersection_points[k]){
+                        std::cout << "overwrite" << std::endl;
+                        k--; // overwrite the last one
+                    } else {
+                        std::cout << "next" << std::endl;
                         break;
+                    }
                 }
-                rightmost_parabola++;
+                k++;
 
                 // reinit for the next parabola
-                parab_center_period[rightmost_parabola] = phase;
-                intersection_points[rightmost_parabola] = last_intersection;
-                intersection_points[rightmost_parabola + 1] = maxz;
+                v_period[k] = q;
+                intersection_points[k] = last_intersection;
+                intersection_points[k + 1] = maxz;
             }
 
-            rightmost_parabola = 0; // 615
+            k = 0; // 615
 
             for(int phase: phases){
-                while (intersection_points[rightmost_parabola + 1] < (double) phase) {
-                    rightmost_parabola++;
+                if(period >= 196 && period % 2 == 0 || period >= 221){
+                    std::cout << "skipping error !!!!!!!!!!" << std::endl;
+                    continue;
+                }
+                int q = phase + phase_range_offset;
+                while (intersection_points[k + 1] < q) {
+                    k++;
                 }
                 std::pair<int, uint> x = std::make_pair(phase, period);
 
-                double a = (phase - parab_center_period[rightmost_parabola]); // TODO name me
-                // TODO: not sure about these indexes
-                std::pair<int, uint> x_prime = std::make_pair(parab_center_period[rightmost_parabola] + max_phases, period);
+                double distance = (q - v_period[k]);
+                std::pair<int, uint> x_prime = std::make_pair(v_period[k] - phase_range_offset, period);
 
-                minBV[row_number][x_prime] = energy_map[row_number][x_prime] + lambda_c * std::pow(a, 2);
-                phases[row_number][x_prime] = parab_center_period[rightmost_parabola];
-                // period_indexes[row_number][x] = period_index;
+                minBV[row_number][x] = minBV[row_number][x_prime] + lambda_c * std::pow(distance, 2);
             }
         } // 633
         maxz = INT_MAX; // (1.0 + lambda_d * std::pow(m_num_periods, 2)) / (2.0 * lambda_d);
@@ -373,8 +376,8 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
                     continue;
                 }
 
-                rightmost_parabola = 0;
-                parab_center_period[0] = 0;
+                k = 0;
+                v_period[0] = 0;
                 parab_center_phase[0] = (double) 1337.1; //min_d
                 intersection_points[0] = -maxz;
                 intersection_points[1] = maxz;
@@ -385,60 +388,60 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
                     std::pair<int, uint> x = std::make_pair(phase, period);
                     left_term = minBV[row_number][x] + lambda_d * std::pow(period, 2);
 
-                    std::pair<int, uint> x_prime = std::make_pair(0, parab_center_period[rightmost_parabola]);
-                    right_term = minBV[row_number][x_prime] + lambda_d * std::pow(parab_center_phase[rightmost_parabola], 2);
+                    std::pair<int, uint> x_prime = std::make_pair(0, v_period[k]);
+                    right_term = minBV[row_number][x_prime] + lambda_d * std::pow(parab_center_phase[k], 2);
 
-                    normalizer = (2.0 * lambda_d * (period - parab_center_phase[rightmost_parabola]));
+                    normalizer = (2.0 * lambda_d * (period - parab_center_phase[k]));
 
-                    // s = () - (pointer_to_period_data[number_of_phases * parab_center_period[rightmost_parabola]].minBV + m_lambdad * (double)(parab_center_phase[rightmost_parabola] * parab_center_phase[rightmost_parabola]))) /
-                    //     (2.0 * m_lambdad * (double)(d - parab_center_phase[rightmost_parabola]));
+                    // s = () - (pointer_to_period_data[number_of_phases * v_period[k]].minBV + m_lambdad * (double)(parab_center_phase[k] * parab_center_phase[k]))) /
+                    //     (2.0 * m_lambdad * (double)(d - parab_center_phase[k]));
 
                     last_intersection = (int) ((left_term - right_term) / normalizer);
 
-                    if (last_intersection <= intersection_points[rightmost_parabola])
-                        rightmost_parabola--;
+                    if (last_intersection <= intersection_points[k])
+                        k--;
                     else
                         break;
                 }
 
-                rightmost_parabola++;
+                k++;
 
                 //NEW d_development
-                parab_center_period[rightmost_parabola] = phase;
-                parab_center_phase[rightmost_parabola] = period;
+                v_period[k] = phase;
+                parab_center_phase[k] = period;
 
-                intersection_points[rightmost_parabola] = last_intersection;
-                intersection_points[rightmost_parabola + 1] = maxz;
+                intersection_points[k] = last_intersection;
+                intersection_points[k + 1] = maxz;
             }
-            rightmost_parabola = 0;
+            k = 0;
             // reset phase
             for(std::pair<uint, std::vector<int>> const& item: Xs){
                 uint period = item.first;
                 std::vector<int> phases = item.second;
                 for(int phase: phases) {
 
-                    while (intersection_points[rightmost_parabola + 1] < period) {
-                        rightmost_parabola++;
+                    while (intersection_points[k + 1] < period) {
+                        k++;
                     }
 
-                    uint iTmp = period - parab_center_period[rightmost_parabola];
+                    uint iTmp = period - v_period[k];
 
-                    int last_parabola_center = parab_center_period[rightmost_parabola];
+                    int last_parabola_center = v_period[k];
                     int some_index = m_number_phases * last_parabola_center;
 
-                    std::pair<int, uint> x = std::make_pair(parab_center_period[rightmost_parabola] + max_phases, period);
+                    int max_phases = 1337;
+                    std::pair<int, uint> x = std::make_pair(v_period[k] + max_phases, period);
 
-                    std::pair<int, uint> x_prime = std::make_pair(parab_center_period[rightmost_parabola] + max_phases, period);
+                    std::pair<int, uint> x_prime = std::make_pair(v_period[k] + max_phases, period);
 
                     // idk about x, x_prime
                     minBV[row_number][x] = minBV[row_number][x_prime] + lambda_d * std::pow(iTmp, 2);
-                    std::pair<int, uint> x_second = std::make_pair(phase, parab_center_period[rightmost_parabola]);
-                    _phases[row_number][x] = _phases[row_number][m_number_phases * last_parabola_center];
-                    _period_indexes[row_number][x] = parab_center_period[rightmost_parabola];
+                    std::pair<int, uint> x_second = std::make_pair(phase, v_period[k]);
+                    // _phases[row_number][x] = _phases[row_number][m_number_phases * last_parabola_center];
+                    // _period_indexes[row_number][x] = v_period[k];
                 }
             }
         }
     }
-}
-return best_values;
+    return best_values;
 }
