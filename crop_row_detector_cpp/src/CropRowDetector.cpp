@@ -218,7 +218,7 @@ double CropRowDetector::cumulative_sum(int v, int start) {
 }
 
 std::vector<std::pair<int, int>>
-CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, double>> energy_map,
+CropRowDetector::find_best_parameters(const std::vector<std::map<std::pair<int, int>, double>> energy_map,
                                       std::map<uint, std::vector<int>> Xs) {
 // std::vector<std::pair<int, int>> CropRowDetector::find_optimal_x(std::vector<std::map<std::pair<int, int>, double>> energy_map,
 //         std::vector<std::pair<int, int>> X, bool num_rows, bool x, double D_max, double f_low=1) {
@@ -302,7 +302,11 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
 
             // for the second parabola until the last
             // for (int phase = phase_range_min + 1; phase < phase_range_max; phase++) // 593
-
+            std::map<std::pair<int, int>, double> tmp;
+            double fq;
+            double q2;
+            double fvk;
+            double vk2;
             for (auto phase_iter=phases.begin() + 1; phase_iter != phases.end(); phase_iter++)
             {
                 int phase = *phase_iter;
@@ -311,13 +315,16 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
                 std::cout << "x: " << x.first << ", " << x.second << std::endl;
 
                 while (true) {
-                    double fq = energy_map[row_number][x];
-                    double q2 = lambda_c * std::pow(q, 2);
+                    tmp = energy_map.at(row_number);
+                    fq = tmp[x];
+
+                    q2 = lambda_c * std::pow(q, 2);
 
                     std::pair<int, uint> x_vk = std::make_pair(v_period[k] - phase_range_offset, period);
-                    double fvk = energy_map[row_number][x_vk];
+                    tmp = energy_map.at(row_number);
+                    fvk = tmp[x_vk];
 
-                    double vk2 = lambda_c * std::pow(v_period[k], 2);
+                    vk2 = lambda_c * std::pow(v_period[k], 2);
                     normalizer = 2.0 * lambda_c * (q - v_period[k]);
 
                     last_intersection = (int) (( (fq + q2) - (fvk + vk2) ) / normalizer);
@@ -354,31 +361,24 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
 
                 double distance = (q - v_period[k]);
                 std::pair<int, uint> x_prime = std::make_pair(v_period[k] - phase_range_offset, period);
-
-                minBV[row_number][x] = minBV[row_number][x_prime] + lambda_c * std::pow(distance, 2);
+                minBV.at(row_number)[x] = minBV.at(row_number)[x_prime] + lambda_c * std::pow(distance, 2);
             }
         } // 633
         maxz = INT_MAX; // (1.0 + lambda_d * std::pow(m_num_periods, 2)) / (2.0 * lambda_d);
 
         int m_number_phases = 1337;
         // loop phases
-        bool skip_first;
-        skip_first = true;
-
         for(std::pair<uint, std::vector<int>> const& item: Xs){
             uint period = item.first;
             std::vector<int> phases = item.second;
 
-            for(int phase: phases) {
-                // next period
-                if(skip_first){
-                    skip_first = false;
-                    continue;
-                }
+            for (auto phase_iter=phases.begin() + 1; phase_iter != phases.end(); phase_iter++) {
+                int phase = *phase_iter;
+                std::pair<int, uint> x = std::make_pair(phase, period);
 
                 k = 0;
                 v_period[0] = 0;
-                parab_center_phase[0] = (double) 1337.1; //min_d
+                parab_center_phase[0] = Xs.begin()->first; //min_d
                 intersection_points[0] = -maxz;
                 intersection_points[1] = maxz;
 
@@ -386,10 +386,10 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
 
                 while (true) {
                     std::pair<int, uint> x = std::make_pair(phase, period);
-                    left_term = minBV[row_number][x] + lambda_d * std::pow(period, 2);
+                    left_term = minBV.at(row_number)[x] + lambda_d * std::pow(period, 2);
 
                     std::pair<int, uint> x_prime = std::make_pair(0, v_period[k]);
-                    right_term = minBV[row_number][x_prime] + lambda_d * std::pow(parab_center_phase[k], 2);
+                    right_term = minBV.at(row_number)[x_prime] + lambda_d * std::pow(parab_center_phase[k], 2);
 
                     normalizer = (2.0 * lambda_d * (period - parab_center_phase[k]));
 
@@ -435,7 +435,7 @@ CropRowDetector::find_best_parameters(std::vector<std::map<std::pair<int, int>, 
                     std::pair<int, uint> x_prime = std::make_pair(v_period[k] + max_phases, period);
 
                     // idk about x, x_prime
-                    minBV[row_number][x] = minBV[row_number][x_prime] + lambda_d * std::pow(iTmp, 2);
+                    minBV.at(row_number)[x] = minBV.at(row_number)[x_prime] + lambda_d * std::pow(iTmp, 2);
                     std::pair<int, uint> x_second = std::make_pair(phase, v_period[k]);
                     // _phases[row_number][x] = _phases[row_number][m_number_phases * last_parabola_center];
                     // _period_indexes[row_number][x] = v_period[k];

@@ -40,6 +40,5 @@ public:
 private:
     cv::Mat m_integral_image;
     double cumulative_sum(int v, int start);
-
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
