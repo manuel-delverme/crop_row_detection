@@ -24,7 +24,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wnon-virtual-dtor -pedantic 
 # set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 
-find_package(OpenCV 2 REQUIRED)
+find_package(OpenCV 3 REQUIRED)
 INCLUDE_DIRECTORIES("/usr/local/")
 
 # find_package(catkin REQUIRED COMPONENTS

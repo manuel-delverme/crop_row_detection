@@ -15,9 +15,9 @@
 
 #define DEBUG 1
 
-
 using namespace std;
-vector<pair<int, int>> find_best_parameters(vector<map<pair<int, int>, double>> vector);
+
+vector<tuple_type> find_best_parameters(vector<map<tuple_type, double>> vector);
 
 void display_img(cv::Mat image){
     cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
@@ -28,22 +28,21 @@ void display_img(cv::Mat image){
     cv::destroyWindow("Display Image");
 }
 
-void plot_template_matching(const cv::Mat &pIntensityImg,
-                            vector<pair<int, int>> &match_results) {
+void plot_template_matching(const cv::Mat &pIntensityImg, vector<tuple_type> &match_results) {
     cv::Mat temp_image;
     cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
     int image_height = pIntensityImg.size[0];
     int image_width = pIntensityImg.size[1];
-    pair<int, int> x;
+    tuple_type x;
 
     for (int image_row_num = 0; image_row_num < image_height; image_row_num++) {
             x = match_results.at((unsigned long) image_row_num);
             // int column = x.first + (int) std::round(settings["width"]/2);
-            int phase = x.first;
-            int period = x.second;
+            phase_type phase = x.first;
+            period_type period = x.second;
             int center_of_image = (int) ::std::round(image_width / 2);
             cout << image_row_num << " " << phase << "," << period << endl;
-            int column = center_of_image + phase;
+            int column = (int) (center_of_image + phase);
             while(column < image_width) {
                 cv::Vec3b &pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
                 //std::cerr << ">drawing on: " << column << std::endl;
@@ -51,7 +50,7 @@ void plot_template_matching(const cv::Mat &pIntensityImg,
                 column += period;
             }
 
-            column = center_of_image + phase - period;
+            column = (int) (center_of_image + phase - period);
             while(column >= 0) {
                 cv::Vec3b& pPixel = temp_image.at<cv::Vec3b>(image_row_num, column);
                 // std::cerr << "<drawing on: " << column << std::endl;
@@ -62,23 +61,16 @@ void plot_template_matching(const cv::Mat &pIntensityImg,
     display_img(temp_image);
 }
 
-map<uint, vector<int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves) {
-    map<uint, vector<int>> Xs;
-    vector<int> phases;
-
-    uint period = 0;
-    uint old_period = 0;
+map<period_type, vector<phase_type>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves) {
+    map<period_type, vector<phase_type>> Xs;
+    vector<phase_type> phases;
+    period_type period;
 
     int n_samples = (n_samples_per_octave * n_octaves);
     for (int sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
         phases.clear();
-
-        period = (uint) std::round(d_min * std::pow(2.f, (double) sample_number / (double) n_samples_per_octave));
-        if(period == old_period){
-            // skip if two periods are the same
-            continue;
-        }
-        old_period = period;
+        period = (period_type) (d_min * std::pow(2.f, (double) sample_number / (double) n_samples_per_octave));
+        period = std::trunc(period * 100000) / 100000; // HAHAHHAHAHAHAH
         int half_band = (int) round(0.5 * period);
 
         for (int phase = -half_band; phase < half_band; phase++) {
@@ -91,8 +83,8 @@ map<uint, vector<int>> get_Xs(int d_min, int n_samples_per_octave, int n_octaves
     return Xs;
 }
 
-vector<map<pair<int, int>, double>> load_match_results_from_csv() {
-    vector<map<pair<int, int>, double>> energy_map;
+vector<map<tuple_type, double>> load_match_results_from_csv(map<period_type, vector<phase_type>>& Xs) {
+    vector<map<tuple_type, double>> energy_map;
     std::ifstream csv_stream("../energy_by_row.csv");
     std::string row;
 
@@ -102,10 +94,12 @@ vector<map<pair<int, int>, double>> load_match_results_from_csv() {
 
     int row_number;
     int old_row_number = -1;
+    period_type old_period = -1;
     double score;
-    int phase;
-    int period;
-    std::pair<int, int> x;
+    phase_type phase;
+    period_type period;
+    tuple_type x;
+    std::vector<phase_type> phases;
 
     while(std::getline(csv_stream, row)){
         std::stringstream ss(row);
@@ -114,20 +108,29 @@ vector<map<pair<int, int>, double>> load_match_results_from_csv() {
         ss.ignore();
         if(old_row_number != row_number){
             old_row_number = row_number;
-            energy_map.push_back(std::map<std::pair<int, int>, double>());
+            energy_map.push_back(std::map<tuple_type, double>());
         }
 
         ss >> score;
         ss.ignore();
 
-        ss >> phase;
+        ss >> period;
         ss.ignore();
 
-        ss >> period;
-        x = std::make_pair<int, int>((int &&) phase, (int &&) period);
+        if(old_period != period){
+            if(old_period != -1){
+                Xs.insert(std::make_pair(old_period, phases));
+            }
+
+            old_period = period;
+            phases.clear();
+        }
+
+        ss >> phase;
+        x = std::make_pair(phase, period);
+        phases.push_back(phase);
         energy_map.at(row_number)[x] = score;
 
-        // std::cout<<row<<std::endl;
     }
     return energy_map;
 }
@@ -165,16 +168,18 @@ int main(int argc, char** argv){
 
     ImagePreprocessor preprocessor (argv[1], image_size);
 
-
     CropRowDetector row_detector = CropRowDetector();
-    map<uint, vector<int>> Xs = get_Xs(d_min, n_samples_per_octave, n_octaves);
-    std::vector<std::map<std::pair<int, int>, double>> energy_map((unsigned long) image_size.height);
+    map<period_type, vector<phase_type>> Xs;
+#if !DEBUG
+    Xs = get_Xs(d_min, n_samples_per_octave, n_octaves);
+#endif
+    std::vector<std::map<tuple_type, double>> energy_map((unsigned long) image_size.height);
     std::vector<cv::Mat> data = preprocessor.process();
 
     for (cv::Mat& pIntensityImg : data) {
 
 #if DEBUG
-        energy_map = load_match_results_from_csv();
+        energy_map = load_match_results_from_csv(Xs);
 #else
         row_detector.load(pIntensityImg);
         std::vector<std::pair<int, int>> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs,
@@ -182,7 +187,7 @@ int main(int argc, char** argv){
                                                                                         (int) settings["width"]);
         plot_template_matching(pIntensityImg, match_results);
 #endif
-        std::vector<std::pair<int, int>> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
+        std::vector<tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
 
     }
     std::cout << "done" << std::endl;
