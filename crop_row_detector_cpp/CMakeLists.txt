@@ -8,13 +8,17 @@ set(CMAKE_BUILD_TYPE Debug)
 #   set(CMAKE_BUILD_TYPE "Release")
 # endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wnon-virtual-dtor -pedantic -Wall \
+set(CMAKE_C_COMPILER /usr/bin/clang)
+set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wnon-virtual-dtor -pedantic -Wall \
     -Wno-missing-braces -Wextra -Wno-missing-field-initializers -Wformat=2 \
     -Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith \
     -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
     -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
     -ggdb3 \
     -O0 \
+    -fno-limit-debug-info \
     -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing \
     -lm")
 
@@ -55,6 +59,5 @@ add_executable(crop_row_detection ${my_project_SRC}
         src/CropRowDetector.cpp
         src/CropRowDetector.h
         # src/hello_world.cpp
-        )
 # target_link_libraries(crd_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 target_link_libraries(crop_row_detection ${OpenCV_LIBS})

@@ -90,9 +90,9 @@ vector<map<tuple_type, double>> load_match_results_from_csv(map<period_type, vec
 
     // drop header
     std::getline(csv_stream, row);
-    std::cout << "read: " << row  << std::endl;
+    // std::cout << "read: " << row  << std::endl;
 
-    int row_number;
+    int row_number = - 1;
     int old_row_number = -1;
     period_type old_period = -1;
     double score;
@@ -100,16 +100,13 @@ vector<map<tuple_type, double>> load_match_results_from_csv(map<period_type, vec
     period_type period;
     tuple_type x;
     std::vector<phase_type> phases;
+    bool save_Xs = true;
 
     while(std::getline(csv_stream, row)){
         std::stringstream ss(row);
 
         ss >> row_number;
         ss.ignore();
-        if(old_row_number != row_number){
-            old_row_number = row_number;
-            energy_map.push_back(std::map<tuple_type, double>());
-        }
 
         ss >> score;
         ss.ignore();
@@ -117,21 +114,59 @@ vector<map<tuple_type, double>> load_match_results_from_csv(map<period_type, vec
         ss >> period;
         ss.ignore();
 
-        if(old_period != period){
-            if(old_period != -1){
-                Xs.insert(std::make_pair(old_period, phases));
-            }
+        ss >> phase;
+        // std::cout << row_number << "," << score << "," << period << "," << phase << std::endl;
 
+        if(old_period != period){ // this is a new period
+            if(old_period != -1 && save_Xs){ // first time there is nothing to add
+                Xs.insert(std::make_pair(old_period, phases)); // save the old period/phase
+                // std::cout << "added period: " << old_period << std::endl;
+            }
             old_period = period;
             phases.clear();
         }
 
-        ss >> phase;
+        if(old_row_number != row_number){ // row changed
+            if(phases.size() > 0 && save_Xs) { // this happens if there is only one period
+                Xs.insert(std::make_pair(old_period, phases));
+                // std::cout << "added period: " << old_period << std::endl;
+            }
+            if(old_row_number != -1){
+                save_Xs = false;
+            }
+            old_row_number = row_number;
+            energy_map.push_back(std::map<tuple_type, double>()); // add a new row to the structure
+            phases.clear(); // just in case two rows have the same phase
+        }
+
         x = std::make_pair(phase, period);
         phases.push_back(phase);
+        // std::cout << "added phase: " << phase << std::endl;
         energy_map.at(row_number)[x] = score;
-
     }
+    if(save_Xs){
+        // add the last row
+        Xs.insert(std::make_pair(old_period, phases)); // save the old period/phase
+    }
+
+    /*
+    for(auto const& item: Xs)
+    {
+        period_type period_ = item.first;
+        std::cout << "period: " << period_ << std::endl;
+        std::vector<phase_type> phases_ = item.second;
+
+        for (auto phase_iter = phases_.begin(); phase_iter != phases_.end(); phase_iter++) {
+            phase_type phase_ = *phase_iter;
+            std::cout << "phase: " << phase_ << std::endl;
+            x = std::make_pair(phase_, period_);
+            for(uint rn = 0; rn < row_number + 1; rn++){
+                double val = energy_map.at(rn).at(x);
+                std::cout << "row:" << rn << " val:" << val << " period:" <<  period_ << " phase" << phase_ << std::endl;
+            }
+        }
+    }
+    */
     return energy_map;
 }
 

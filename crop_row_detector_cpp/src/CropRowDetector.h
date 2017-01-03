@@ -28,19 +28,25 @@ public:
     int saturate(int val, int val_min, int val_max) {
             return std::max(std::min(val, val_max), val_min);
     }
-    double CrossCorrelation(int row_number, std::pair<int, int> template_var_param, double positive_pulse_width,
+    double CrossCorrelation(int row_number, tuple_type template_var_param, double positive_pulse_width,
                             double negative_pulse_width, int image_width);
 
-    std::vector<tuple_type> find_best_parameters(std::vector<std::map<tuple_type, double>> vector,
-                                                          std::map<period_type, std::vector<phase_type>> vector1);
+    std::vector<tuple_type> find_best_parameters(const std::vector<std::map<tuple_type, double>> energy_map,
+                                                 const std::map<period_type, std::vector<phase_type>> &Xs);
 
-    std::vector<std::pair<int, int>>
-    template_matching(std::vector<std::map<std::pair<int, int>, double>> &energy_map, const cv::Mat &Intensity,
-                      std::map<uint, std::vector<int>> Xs, const double positive_pulse_width,
+    std::vector<tuple_type> template_matching(std::vector<std::map<tuple_type, double>> &energy_map, const cv::Mat &Intensity,
+                      std::map<period_type, std::vector<phase_type>> Xs, const double positive_pulse_width,
                       const double negative_pulse_width, const int window_width);
 
 private:
     cv::Mat m_integral_image;
+    std::vector<period_type> m_period_map;
     double cumulative_sum(int v, int start);
+
+    size_t index_of_period(period_type period);
+
+    double * distance_transform(std::vector<double> values, size_t length);
+
+    std::vector<period_type> periods_of(const std::map<period_type, std::vector<phase_type>> &phase, phase_type i1);
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
