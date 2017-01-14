@@ -23,11 +23,6 @@ public:
     double half_width, period_scale_factor;
   
     void load(const cv::Mat& intensity);
-    cv::Mat detect(cv::Mat& intensity, cv::Mat& temp);
-
-    int saturate(int val, int val_min, int val_max) {
-            return std::max(std::min(val, val_max), val_min);
-    }
     double CrossCorrelation(int row_number, tuple_type template_var_param, double positive_pulse_width,
                             double negative_pulse_width, int image_width);
 
@@ -41,11 +36,15 @@ public:
 private:
     cv::Mat m_integral_image;
     std::vector<period_type> m_period_map;
+
+    const float m_maxD = 1.0;
+    const float m_f_low = 1.0;
+    const float m_lambda_c = 0.5;
+    const float m_lambda_d = 0.2;
+
     double cumulative_sum(int v, int start);
 
     size_t index_of_period(period_type period);
-
-    double * distance_transform(std::vector<double> values, size_t length);
 
     std::vector<period_type> periods_of(const std::map<period_type, std::vector<phase_type>> &phase, phase_type i1);
 };

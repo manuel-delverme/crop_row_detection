@@ -19,8 +19,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wnon-virtual-dtor -pedantic 
     -ggdb3 \
     -O0 \
     -fno-limit-debug-info \
-    -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing \
-    -lm")
+    -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing")
 
 # -Werror \
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lm -Wall -Wextra -Wshadow -Wnon-virtual-dtor -pedantic -Wconversion")
@@ -59,5 +58,6 @@ add_executable(crop_row_detection ${my_project_SRC}
         src/CropRowDetector.cpp
         src/CropRowDetector.h
         # src/hello_world.cpp
+        )
 # target_link_libraries(crd_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 target_link_libraries(crop_row_detection ${OpenCV_LIBS})

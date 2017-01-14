@@ -191,48 +191,6 @@ double CropRowDetector::cumulative_sum(int v, int start) {
     return m_integral_image.at<double>(v, start);
 }
 
-inline double * CropRowDetector::distance_transform(std::vector<double> values, size_t length) {
-    // TODO remove news
-
-    // TODO to be defined with real variables
-    // TODO readd labmdas
-    float lambda_c = 0.5;
-    float lambda_d = 0.5;
-
-    double *d = new double[length];
-    int *parabola_centers = new int[length];
-    double *intersection_points = new double[length+1];
-    int parabola_idx = 0;
-    double intersection_point;
-
-    parabola_centers[0] = 0;
-    intersection_points[0] = -INFINITY;
-    intersection_points[1] = +INFINITY;
-    for (int q = 1; q <= length-1; q++) {
-        intersection_point = ((values[q] + std::pow(q, 2)) - (values[parabola_centers[parabola_idx]] + std::pow(parabola_centers[parabola_idx], 2))) / (2 * q - 2 * parabola_centers[parabola_idx]);
-        while (intersection_point <= intersection_points[parabola_idx]) {
-            parabola_idx--;
-            intersection_point  = ((values[q]+std::pow(q, 2))-(values[parabola_centers[parabola_idx]]+std::pow(parabola_centers[parabola_idx], 2)))/(2*q-2*parabola_centers[parabola_idx]);
-        }
-        parabola_idx++;
-        parabola_centers[parabola_idx] = q;
-        intersection_points[parabola_idx] = intersection_point;
-        intersection_points[parabola_idx+1] = +INFINITY;
-    }
-
-    parabola_idx = 0;
-    for (int q = 0; q <= length-1; q++) {
-        while (intersection_points[parabola_idx+1] < q){
-            parabola_idx++;
-        }
-        d[q] = std::pow(q-parabola_centers[parabola_idx], 2) + values[parabola_centers[parabola_idx]];
-    }
-
-    delete [] parabola_centers;
-    delete [] intersection_points;
-    return d;
-}
-
 std::vector<tuple_type> CropRowDetector::find_best_parameters(std::vector<std::map<tuple_type, double>> energy_map,
                                       const std::map<period_type, std::vector<phase_type >>& Xs) {
 
@@ -241,6 +199,15 @@ std::vector<tuple_type> CropRowDetector::find_best_parameters(std::vector<std::m
     // to +inf and ignore them if required
     size_t image_height = (size_t) energy_map.size();
     size_t num_periods = Xs.size();
+
+
+    // TODO: remove the following
+    std::vector<std::map<tuple_type, double>> B(energy_map);
+    std::vector<std::map<tuple_type, double>> D(energy_map);
+    std::vector<std::map<tuple_type, double>> minBV(energy_map);
+    std::vector<std::map<tuple_type, phase_type>> c(image_height);
+    std::vector<std::map<tuple_type, size_t>> d(image_height);
+    // up to here
 
     std::set<phase_type> all_the_phases;
     std::vector<tuple_type> best_nodes(image_height);
@@ -253,123 +220,188 @@ std::vector<tuple_type> CropRowDetector::find_best_parameters(std::vector<std::m
     }
     size_t num_phases = all_the_phases.size();
 
-    double *distances;
-    std::vector<double> f(std::max(num_periods, num_phases));
+
+    std::vector<std::map<phase_type, phase_type>> precedent_best_phase(image_height);
+    std::vector<std::map<period_type, period_type>> precedent_best_period(image_height);
+    // double *distances;
+
+    // std::vector<double> f(std::max(num_periods, num_phases));
+    auto comparer = [] (const auto & p1, const auto & p2) { return p1.second < p2.second;};
+    double Dnrm;
+    // phase_type phase;
+    // period_type period;
+    std::vector<phase_type> phases;
 
     for (size_t row_number = 0; row_number < image_height; row_number++) {
         std::cout << "working on row " << row_number << std::endl;
+        Dnrm = std::max_element(std::begin(energy_map.at(row_number)), std::end(energy_map.at(row_number)), comparer)->second;
 
-        for (std::pair<period_type, std::vector<phase_type>> const &item: Xs) {
-            const period_type period = item.first;
-            std::vector<phase_type> phases = item.second;
-
-            // std::cout << "[F] period: " << period << std::endl;
-
-            phase_type phase_range_offset; // TODO use negative phases
-            phase_range_offset = -*std::min_element(phases.begin(), phases.end());
-            for (phase_type phase: phases){
-                // std::cout << "\t[F] phase: " << phase << std::endl;
-                const tuple_type x = std::make_pair(phase, period);
-                f[phase + phase_range_offset] = energy_map.at(row_number).at(x);
-            }
-            distances = distance_transform(f, phases.size());
-            for (phase_type phase: phases){
-                // const phase_type phase = *phase_iter;
-                // std::cout << "\t[B] phase: " << phase << std::endl;
-                const tuple_type x = std::make_pair(phase, period);
-                // if(energy_map.at(row_number).find(x)->second != distances[phase + phase_range_offset]){
-                //     std::cout << "\t[B] replacing: " << energy_map.at(row_number).find(x)->second << " with " << distances[phase + phase_range_offset] << std::endl;
-                // }
-
-                energy_map.at(row_number).find(x)->second = distances[phase + phase_range_offset];
-                // std::cout << "\t[*] is now: " << energy_map.at(row_number).find(x)->second << std::endl;
-            }
-        } // 633
-        std::cout << "done; working on periods" << std::endl;
-
-        // std::vector<period_type> period_intersection_points(Xs.size());
-
-        //TODO think of a better structure
         for (std::pair<period_type, std::vector<phase_type>> const &item: Xs) {
             period_type period = item.first;
-            m_period_map.push_back(period);
-        }
 
-        for (phase_type phase: all_the_phases){
-            std::cout << std::endl << "phase " << phase << std::endl;
-            auto periods = periods_of(Xs, phase);
-            for (period_type period: periods) {
-                // std::cout << "\t[F] period: " << period << std::endl;
-                // period_type period = item.first;
-                // std::vector<phase_type> phases = item.second;
-                tuple_type x = std::make_pair(phase, period);
-                f.at(index_of_period(period)) = energy_map.at(row_number).at(x);
+            for (phase_type phase: item.second) {
+
+                const tuple_type x = std::make_pair(phase, period);
+                // double b_val;
+
+                if(Dnrm >= m_f_low)
+                {
+                    // b_val = 1.0 - energy_map.at(row_number).at(x) / Dnrm;
+                    B.at(row_number).at(x) = 1.0 - energy_map.at(row_number).at(x) / Dnrm;
+
+                    if(B.at(row_number).at(x) > m_maxD){
+                        B.at(row_number).at(x) = m_maxD;
+                    }
+                } else {
+                    B.at(row_number).at(x) = m_maxD;
+                }
+
+                if(row_number > 0){
+                    B.at(row_number).at(x) += minBV.at(row_number - 1).at(x);
+                }
+                // energy_map.at(row_number).at(x) = b_val;
+                // TODO: ENERGYMAP == D
             }
-            distances = distance_transform(f, num_phases);
-            for (period_type period: periods_of(Xs, phase)) {
-                // std::cout << "\t[B] period: " << period << std::endl;
-                tuple_type x = std::make_pair(phase, period);
-                auto val_ptr = energy_map.at(row_number).find(x);
-                // if(val_ptr->second != distances[index_of_period(period)]){
-                //     std::cout << "\t\t[B] replacing: " << val_ptr->second << " with "
-                //               << distances[index_of_period(period)] << std::endl;
-                // }
-                energy_map.at(row_number).find(x)->second = distances[index_of_period(period)];
-                // std::cout << "\t[*] is now: " << energy_map.at(row_number).find(x)->second << std::endl;
+        }
+        phase_type phase_range_offset; // TODO use negative phases
+
+        if(row_number < image_height - 1) {
+            for (std::pair<period_type, std::vector<phase_type>> const &item: Xs) {
+                period_type period = item.first;
+                phases = item.second;
+                // phase_range_offset = -phases.at(0);
+
+                size_t length = phases.size();
+                phase_type *parabola_centers = new phase_type[length];
+                double *intersection_points = new double[length+1];
+                int parabola_idx = 0;
+                double intersection_point;
+
+                parabola_centers[0] = phases.at(0);
+                intersection_points[0] = -INFINITY;
+                intersection_points[1] = +INFINITY;
+
+                tuple_type vk;
+                for (const phase_type phase: phases) {
+                    const tuple_type x = std::make_pair(phase, period);
+                    vk = std::make_pair(parabola_centers[parabola_idx], period);
+                    double num_phase = B.at(row_number).at(x) + m_lambda_c * (double)(phase*phase);
+
+                    while(true){
+                        intersection_point = num_phase - B.at(row_number).at(vk) + m_lambda_c * std::pow(parabola_centers[parabola_idx], 2);
+                        intersection_point /= 2.0 * m_lambda_c * (phase - parabola_centers[parabola_idx]);
+                        if(intersection_point <= intersection_points[parabola_idx]) {
+                            parabola_idx--;
+                        } else {
+                            break;
+                        }
+                    }
+                    parabola_idx++;
+                    parabola_centers[parabola_idx] = phase;
+                    intersection_points[parabola_idx] = intersection_point;
+                    intersection_points[parabola_idx+1] = +INFINITY;
+                }
+
+                parabola_idx = 0;
+                for (phase_type phase: phases) {
+                    const tuple_type x = std::make_pair(phase, period);
+                    while (intersection_points[parabola_idx + 1] < (double) phase) {
+                        parabola_idx++;
+                    }
+                    vk = std::make_pair(parabola_centers[parabola_idx], period);
+                    double phase_dist = phase - parabola_centers[parabola_idx];
+                    minBV.at(row_number).at(x) = B.at(row_number).at(vk) + m_lambda_c * phase_dist * phase_dist;
+                    c.at(row_number).at(x) = parabola_centers[parabola_idx];
+                }
+            }
+            std::cout << "done; working on periods" << std::endl;
+
+            //TODO think of a better structure to iterate on
+            for (std::pair<period_type, std::vector<phase_type>> const &item: Xs) {
+                const period_type period = item.first;
+                m_period_map.push_back(period);
+            }
+
+            for (phase_type phase: all_the_phases) {
+                std::cout << std::endl << "phase " << phase << std::endl;
+                auto periods = periods_of(Xs, phase);
+                size_t length = periods.size();
+                period_type *parabola_centers = new period_type[length];
+                double *intersection_points = new double[length+1];
+                int parabola_idx = 0;
+                double intersection_point;
+
+                parabola_centers[0] = 0;
+                intersection_points[0] = -INFINITY;
+                intersection_points[1] = +INFINITY;
+
+                tuple_type vk;
+                for (const period_type period: periods) {
+                    const tuple_type x = std::make_pair(phase, period);
+                    vk = std::make_pair(parabola_centers[parabola_idx], period);
+                    double num_period = minBV.at(row_number).at(x) + m_lambda_d * (double) (period * period);
+                    while (true) {
+                        intersection_point = num_period - minBV.at(row_number).at(vk) +
+                                             m_lambda_d * std::pow(parabola_centers[parabola_idx], 2);
+                        intersection_point /= 2.0 * m_lambda_d * (phase - parabola_centers[parabola_idx]);
+                        if (intersection_point <= intersection_points[parabola_idx]) {
+                            parabola_idx--;
+                        } else {
+                            break;
+                        }
+                    }
+                    parabola_idx++;
+                    parabola_centers[parabola_idx] = phase;
+                    intersection_points[parabola_idx] = intersection_point;
+                    intersection_points[parabola_idx + 1] = +INFINITY;
+                }
+                parabola_idx = 0;
+                for (const period_type period: periods) {
+                    const tuple_type x = std::make_pair(phase, period);
+                    while (intersection_points[parabola_idx + 1] < (double) period) {
+                        parabola_idx++;
+                    }
+                    vk = std::make_pair(parabola_centers[parabola_idx], period);
+                    double period_dist = period - parabola_centers[parabola_idx];
+                    minBV.at(row_number).at(x) = B.at(row_number).at(vk) + m_lambda_d * period_dist * period_dist;
+                    c.at(row_number).at(x) = c.at(row_number).at(vk);
+                    d.at(row_number).at(x) = index_of_period(period);
+                }
             }
         }
     }
     size_t row_number = image_height - 1;
 
     tuple_type best_node;
-    double best_node_value = INFINITY;
+    double best_node_B = INFINITY;
 
     for(std::pair<period_type, std::vector<phase_type>> const& item: Xs){
-        period_type period = item.first;
-        std::vector<phase_type> phases = item.second;
+        const period_type period = item.first;
+        phases = item.second;
         for(phase_type phase: phases) {
-            tuple_type x = std::make_pair(phase, period);
+            const tuple_type x = std::make_pair(phase, period);
 
-            double x_energy = energy_map.at(row_number).at(x);
-            if(x_energy < best_node_value)
+            if(B.at(row_number).at(x) < best_node_B)
             {
                 best_node = x;
+                best_node_B = B.at(row_number).at(x);
             }
         }
     }
     best_nodes.at(row_number) = best_node;
 
-    /*
-     * In the second stage, represented by lines 18 and 19, the optimal
-     * vector x is selected for each image row, starting from the last one.
-     * In line 18, the vector x, for which the value Bh?1 x ðÞ is minimal,
-     * is selected as the optimal interpretation of the last image row.
-     *
-     * ##########
-     * In line 19, for each preceding image row v, vector xv,
-     * which is optimal for xvþ1 computed in the previous iteration,
-     * is selected as the optimal interpretation of that image row.
-     * This vector corresponds to the vector Tv(xvþ1) stored during the first stage.
-     * At the end of the second stage, optimal vectors xv are obtained for all image rows.
-     * The obtained sequence of vectors x0, x1, …, xh?1
-     * represents the optimal crop model for a given image according to the proposed criterion.
-     * */
-    double tuple_data;
+    phase_type best_phase = best_node.first;
+    period_type best_period = best_node.second;
 
-    double x_energy;
+    while(row_number-- > 0) {
+        best_phase = precedent_best_phase.at(row_number).at(best_phase);
+        best_period = precedent_best_period.at(row_number).at(best_period);
+        best_nodes.at(row_number) = std::make_pair(best_phase, best_period);
 
-    for(row_number = image_height - 2; row_number >= 0 && row_number < image_height; row_number--) {
-        best_node_value = INFINITY;
-        for(auto const& item: energy_map.at(row_number)) {
-            tuple_type x = item.first;
-            x_energy = item.second;
-            if(x_energy < best_node_value)
-            {
-                best_node = x;
-                best_node_value = x_energy;
-            }
-        }
-        best_nodes.at(row_number) = best_node;
+        tuple_type node = best_nodes.at(row_number);
+        auto energies = energy_map.at(row_number);
+        double x = energies.at(node);
+        std::cout << "energy " << x << std::endl;
     }
     return best_nodes;
 }
