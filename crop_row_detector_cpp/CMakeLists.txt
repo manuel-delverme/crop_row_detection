@@ -8,26 +8,32 @@ set(CMAKE_BUILD_TYPE Debug)
 #   set(CMAKE_BUILD_TYPE "Release")
 # endif()
 
-set(CMAKE_C_COMPILER /usr/bin/clang)
-set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+# set(CMAKE_C_COMPILER /usr/bin/clang)
+# set(CMAKE_CXX_COMPILER /usr/bin/clang++)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wnon-virtual-dtor -pedantic -Wall \
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
+    -Wconversion \
+    -std=c++14 -Wnon-virtual-dtor -pedantic -Wall \
     -Wno-missing-braces -Wextra -Wno-missing-field-initializers -Wformat=2 \
     -Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith \
     -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
     -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
+    -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing \
+    -pedantic \
+    -Ofast \
     -ggdb3 \
-    -O0 \
-    -fno-limit-debug-info \
-    -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing")
+")
 
+# -Og \
+# -Ofast \
 # -Werror \
+# -ggdb3 \
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -lm -Wall -Wextra -Wshadow -Wnon-virtual-dtor -pedantic -Wconversion")
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=nocona -O3")
 # set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 
-find_package(OpenCV 3 REQUIRED)
+find_package(OpenCV REQUIRED)
 INCLUDE_DIRECTORIES("/usr/local/")
 
 # find_package(catkin REQUIRED COMPONENTS

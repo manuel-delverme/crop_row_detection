@@ -145,26 +145,26 @@ int main(int argc, char** argv){
     CropRowDetector row_detector = CropRowDetector();
     std::map<period_type, std::vector<phase_type>> Xs;
 #if !DEBUG
-    Xs = get_Xs((period_type) settings["m_min_d"], (uint) settings["n_samples_per_octave"],
-                (uint) settings["n_octaves"]);
+    Xs = get_Xs((period_type) settings["d_min"], (uint) settings["n_samples_per_octave"], (uint) settings["n_octaves"]);
 #endif
     std::vector<std::map<tuple_type, double>> energy_map((size_t) image_size.height);
     std::vector<cv::Mat> data = preprocessor.process();
 
     for (cv::Mat& pIntensityImg : data) {
 
+        std::clock_t start = std::clock();
 #if DEBUG
         energy_map = load_match_results_from_csv(Xs);
 #else
         row_detector.load(pIntensityImg);
-        std::vector<tuple_type> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs,
-                                                                                        settings["a0"], settings["b0"],
-                                                                                        (int) settings["width"]);
-        plot_template_matching(pIntensityImg, match_results);
+        std::vector<tuple_type> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs, settings["a0"], settings["b0"], (size_t) settings["width"]);
 #endif
-        std::clock_t start = std::clock();
         std::vector<tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
         std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+#if !DEBUG
+        // plot_template_matching(pIntensityImg, match_results);
+#endif
+        // plot_template_matching(pIntensityImg, min_energy_results);
 
     }
     std::cout << "done" << std::endl;
