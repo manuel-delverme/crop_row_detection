@@ -141,7 +141,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 	RVLCRD_DPDATA *pointer_to_row_data = m_DPData;
 
 	int u, row_number;
-	int index_of_phase;
+	int index_of_period;
 	int phase_range;
 	int kStart, kEnd;
 	int a, b, phase;
@@ -195,7 +195,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 		pointer_to_period_data = pointer_to_row_data;
 
-		for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, d *= m_dstep, pointer_to_period_data += number_of_phases)
+		for(index_of_period = 0; index_of_period < number_of_periods; index_of_period++, d *= m_dstep, pointer_to_period_data += number_of_phases)
 		{
 #ifdef RVLCRD_DEBUG
 			if(d > 10.0 * debug)
@@ -203,7 +203,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 #endif
 			phase_range = (int)floor(0.5 * d);
 
-			crange_[index_of_phase] = phase_range;
+			crange_[index_of_period] = phase_range;
 
 			scale = d / fd0;
 			fTmp = floor(scale * fa0 + 0.5);
@@ -355,11 +355,11 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 				{
 					bestScore = score;
 					bestc = phase;
-					bestid = index_of_phase;
+					bestid = index_of_period;
 					bestd = d;
 				}
 			}	// for(phase = -phase_range; phase < phase_range; phase++)
-		}	// for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++, d *= m_dstep)
+		}	// for(index_of_period = 0; index_of_period < m_nd; index_of_period++, d *= m_dstep)
 
 		m_c[row_number] = bestc;
 		m_id[row_number] = bestid;
@@ -426,10 +426,10 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 		pointer_to_period_data = pointer_to_row_data;		// pointer_to_period_data - ptr. to the first data in a block row
 
-		for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_period_data += number_of_phases)
+		for(index_of_period = 0; index_of_period < number_of_periods; index_of_period++, pointer_to_period_data += number_of_phases)
 		{
             //OLD phase_range
-			phase_range = crange_[index_of_phase];
+			phase_range = crange_[index_of_period];
 
 			//pointer_to_tuple_data = pointer_to_period_data + m_nc / 2 - phase_range;
 			pointer_to_tuple_data = pointer_to_period_data;
@@ -458,15 +458,15 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 #ifdef RVLCRD_L1
                         std::cout << "sono qui" << std::endl;
-			for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++, pointer_to_period_data += m_nc)
+			for(index_of_period = 0; index_of_period < m_nd; index_of_period++, pointer_to_period_data += m_nc)
 			{
-				phase_range = crange_[index_of_phase];
+				phase_range = crange_[index_of_period];
 
 				pointer_to_tuple_data = pointer_to_period_data + m_nc / 2 - phase_range;
 
 				pointer_to_tuple_data->minBV = pointer_to_tuple_data->B;
 				pointer_to_tuple_data->phase = -phase_range;
-				pointer_to_tuple_data->index_of_phase = index_of_phase;
+				pointer_to_tuple_data->index_of_period = index_of_period;
 
 				pDPPrev = pointer_to_tuple_data;
 
@@ -481,13 +481,13 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					if(pointer_to_tuple_data->minBV <= BV)
 					{
 						pointer_to_tuple_data->phase = phase;
-						pointer_to_tuple_data->index_of_phase = index_of_phase;
+						pointer_to_tuple_data->index_of_period = index_of_period;
 					}
 					else
 					{
 						pointer_to_tuple_data->minBV = BV;
 						pointer_to_tuple_data->phase = pDPPrev->phase;
-						pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
+						pointer_to_tuple_data->index_of_period = pDPPrev->index_of_period;
 					}
 
 					pDPPrev = pointer_to_tuple_data;
@@ -497,7 +497,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 				{
 					pointer_to_tuple_data->minBV = pDPPrev->minBV + m_lambdac;
 					pointer_to_tuple_data->phase = pDPPrev->phase;
-					pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
+					pointer_to_tuple_data->index_of_period = pDPPrev->index_of_period;
 
 					pDPPrev = pointer_to_tuple_data;
 				}
@@ -523,11 +523,11 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 				{
 					pointer_to_tuple_data->minBV = pDPPrev->minBV + m_lambdac;
 					pointer_to_tuple_data->phase = pDPPrev->phase;
-					pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
+					pointer_to_tuple_data->index_of_period = pDPPrev->index_of_period;
 
 					pDPPrev = pointer_to_tuple_data;
 				}
-			}	// for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++)
+			}	// for(index_of_period = 0; index_of_period < m_nd; index_of_period++)
 
 			pointer_to_period_data = pointer_to_row_data;
 
@@ -537,7 +537,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 				pointer_to_tuple_data = pDPPrev + m_nc;
 
-				for(index_of_phase = 1; index_of_phase < m_nd; index_of_phase++, pointer_to_tuple_data += m_nc)
+				for(index_of_period = 1; index_of_period < m_nd; index_of_period++, pointer_to_tuple_data += m_nc)
 				{
 					BV = pDPPrev->minBV + m_lambdad;
 
@@ -545,7 +545,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					{
 						pointer_to_tuple_data->minBV = BV;
 						pointer_to_tuple_data->phase = pDPPrev->phase;
-						pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
+						pointer_to_tuple_data->index_of_period = pDPPrev->index_of_period;
 					}
 
 					pDPPrev = pointer_to_tuple_data;
@@ -555,7 +555,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 
 				pointer_to_tuple_data = pDPPrev - m_nc;
 
-				for(index_of_phase = m_nd - 2; index_of_phase >= 0; index_of_phase--, pointer_to_tuple_data -= m_nc)
+				for(index_of_period = m_nd - 2; index_of_period >= 0; index_of_period--, pointer_to_tuple_data -= m_nc)
 				{
 					BV = pDPPrev->minBV + m_lambdad;
 
@@ -563,7 +563,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					{
 						pointer_to_tuple_data->minBV = BV;
 						pointer_to_tuple_data->phase = pDPPrev->phase;
-						pointer_to_tuple_data->index_of_phase = pDPPrev->index_of_phase;
+						pointer_to_tuple_data->index_of_period = pDPPrev->index_of_period;
 					}
 
 					pDPPrev = pointer_to_tuple_data;
@@ -572,13 +572,13 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 #else
 			maxz = (1.0 + m_lambdac * (double)(number_of_phases * number_of_phases)) / (2.0 * m_lambdac);
 
-			for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_period_data += number_of_phases)
+			for(index_of_period = 0; index_of_period < number_of_periods; index_of_period++, pointer_to_period_data += number_of_phases)
 			{
 #ifdef RVLCRD_DEBUG
-				if(index_of_phase == 186)
+				if(index_of_period == 186)
 					int debug = 0;
 #endif
-				phase_range = crange_[index_of_phase];
+				phase_range = crange_[index_of_period];
 
 				// felzenszwalb_TC12	RVL
 				// ============================================
@@ -641,9 +641,9 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					iTmp = (phase - parab_center_period[rightmost_parabola]);
 					pointer_to_tuple_data->minBV = pointer_to_period_data[parab_center_period[rightmost_parabola] + number_of_phases / 2].B + m_lambdac * (double)(iTmp * iTmp);
 					pointer_to_tuple_data->c = parab_center_period[rightmost_parabola];
-					pointer_to_tuple_data->id = index_of_phase;
+					pointer_to_tuple_data->id = index_of_period;
 				}
-			}	// for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++)
+			}	// for(index_of_period = 0; index_of_period < m_nd; index_of_period++)
 
 			maxz = (1.0 + m_lambdad * (double)(number_of_periods * number_of_periods)) / (2.0 * m_lambdad);
 
@@ -656,7 +656,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					int debug = 0;
 #endif
 				rightmost_parabola = 0;
-				parab_center_period[0] = 0; //for saving index_of_phase
+				parab_center_period[0] = 0; //for saving index_of_period
 				v__[0] = (double)m_mind; //for saving d
 				intersection_points[0] = -maxz;
 				intersection_points[1] = maxz;
@@ -667,7 +667,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 				//d = (double)m_mind*m_dstep;
 				d = (double)m_mind;
 
-				for(index_of_phase = 1; index_of_phase < number_of_periods; index_of_phase++, pointer_to_tuple_data += number_of_phases)
+				for(index_of_period = 1; index_of_period < number_of_periods; index_of_period++, pointer_to_tuple_data += number_of_phases)
 				{
 					//NEW d_development
 					d *= m_dstep;
@@ -675,8 +675,8 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					while(true)
 					{
 						//OLD d
-						//s = ((pointer_to_tuple_data->minBV + m_lambdad * (double)(index_of_phase * index_of_phase)) - (pointer_to_period_data[m_nc * parab_center_period[rightmost_parabola]].minBV + m_lambdad * (double)(parab_center_period[rightmost_parabola] * parab_center_period[rightmost_parabola]))) /
-						//	(2.0 * m_lambdad * (double)(index_of_phase - parab_center_period[rightmost_parabola]));
+						//s = ((pointer_to_tuple_data->minBV + m_lambdad * (double)(index_of_period * index_of_period)) - (pointer_to_period_data[m_nc * parab_center_period[rightmost_parabola]].minBV + m_lambdad * (double)(parab_center_period[rightmost_parabola] * parab_center_period[rightmost_parabola]))) /
+						//	(2.0 * m_lambdad * (double)(index_of_period - parab_center_period[rightmost_parabola]));
 
 						s = ((pointer_to_tuple_data->minBV + m_lambdad * (double)(d * d)) - (pointer_to_period_data[number_of_phases * parab_center_period[rightmost_parabola]].minBV + m_lambdad * (double)(v__[rightmost_parabola] * v__[rightmost_parabola]))) /
 							(2.0 * m_lambdad * (double)(d - v__[rightmost_parabola]));
@@ -692,7 +692,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 					rightmost_parabola++;
 
 					//NEW d_development
-					parab_center_period[rightmost_parabola] = index_of_phase;
+					parab_center_period[rightmost_parabola] = index_of_period;
 					v__[rightmost_parabola] = d;
 
 					intersection_points[rightmost_parabola] = s;
@@ -706,10 +706,10 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 				//NEW d_development
 				d = (double)m_mind;
 
-				for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_tuple_data += number_of_phases)
+				for(index_of_period = 0; index_of_period < number_of_periods; index_of_period++, pointer_to_tuple_data += number_of_phases)
 				{
 					//NEW d_development
-					//while(intersection_points[rightmost_parabola + 1] < (double)index_of_phase)
+					//while(intersection_points[rightmost_parabola + 1] < (double)index_of_period)
 					while(intersection_points[rightmost_parabola + 1] < d)
 					{
 						//debugCounter4++;
@@ -717,7 +717,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 						rightmost_parabola++;
 					}
 
-					//iTmp = (index_of_phase - parab_center_period[rightmost_parabola]);
+					//iTmp = (index_of_period - parab_center_period[rightmost_parabola]);
 					iTmp = (d - v__[rightmost_parabola]);
 
 					pointer_to_tuple_data->minBV = pointer_to_period_data[number_of_phases * parab_center_period[rightmost_parabola]].minBV + (m_lambdad * (double)(iTmp * iTmp));
@@ -734,7 +734,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 #ifdef RVLCRD_DEBUG
 		pointer_to_tuple_data = pointer_to_row_data;
 
-		for(index_of_phase = 0; index_of_phase < m_nd; index_of_phase++)
+		for(index_of_period = 0; index_of_period < m_nd; index_of_period++)
 			for(phase = 0; phase < m_nc; phase++, pointer_to_tuple_data++)
 				if(pointer_to_tuple_data->minBV < 0)
 					int debug = 0;
@@ -759,9 +759,9 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 	//for saving best d
 	d = (double)m_mind;
 
-	for(index_of_phase = 0; index_of_phase < number_of_periods; index_of_phase++, pointer_to_period_data += number_of_phases, d *= m_dstep)
+	for(index_of_period = 0; index_of_period < number_of_periods; index_of_period++, pointer_to_period_data += number_of_phases, d *= m_dstep)
 	{
-		phase_range = crange_[index_of_phase];
+		phase_range = crange_[index_of_period];
 
 		//OLD phase_range
 		//pointer_to_tuple_data = pointer_to_period_data + m_nc / 2 - phase_range;
@@ -773,7 +773,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 			{
 				pBestNode = pointer_to_tuple_data;
 				bestc = phase;
-				bestid = index_of_phase;
+				bestid = index_of_period;
 				bestd = d;
 			}
 	}
@@ -786,7 +786,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 	char name[40];
 	sprintf(name, "Image_ExG_%d.txt", imNum);
 	FILE *f = fopen(name, "w");
-	//fprintf(f, "v\tpDP->D\t\tpDP->B\t\tpDP->minBV\tpDP->phase\tpDP->index_of_phase\sizeof_row_data");
+	//fprintf(f, "v\tpDP->D\t\tpDP->B\t\tpDP->minBV\tpDP->phase\tpDP->index_of_period\sizeof_row_data");
 	//fprintf(f, "---------------------------------------------------------------------------------\sizeof_row_data");
 #endif
 
@@ -821,7 +821,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I, int w, int imNum) {
 		}*/
 
 #ifdef RVLCRD_DEBUG
-		fprintf(f, "%d\t%f\t%f\t%f\t%d\t%d\t%f\sizeof_row_data", v,pointer_to_tuple_data->D,pointer_to_tuple_data->B,pointer_to_tuple_data->minBV,pointer_to_tuple_data->phase,pointer_to_tuple_data->index_of_phase,m_bestScore[v]);
+		fprintf(f, "%d\t%f\t%f\t%f\t%d\t%d\t%f\sizeof_row_data", v,pointer_to_tuple_data->D,pointer_to_tuple_data->B,pointer_to_tuple_data->minBV,pointer_to_tuple_data->phase,pointer_to_tuple_data->index_of_period,m_bestScore[v]);
 #endif
 	}
 

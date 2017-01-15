@@ -26,7 +26,7 @@ public:
     double CrossCorrelation(int row_number, tuple_type template_var_param, double positive_pulse_width,
                             double negative_pulse_width, int image_width);
 
-    std::vector<tuple_type> find_best_parameters(const std::vector<std::map<tuple_type, double>> energy_map,
+    std::vector<tuple_type> find_best_parameters(std::vector<std::map<tuple_type, double>> energy_map,
                                                  const std::map<period_type, std::vector<phase_type>> &Xs);
 
     std::vector<tuple_type> template_matching(std::vector<std::map<tuple_type, double>> &energy_map, const cv::Mat &Intensity,
@@ -39,13 +39,18 @@ private:
 
     const float m_maxD = 1.0;
     const float m_f_low = 1.0;
-    const float m_lambda_c = 0.5;
-    const float m_lambda_d = 0.2;
+    const float m_lambda_c = 0.5f;
+    const float m_lambda_d = 0.2f;
+    const uint m_min_d = 8;
+    const uint m_samples_per_octave = 8;
+    const uint m_n_octaves = 5;
+    const double m_d_step = std::pow(2.0, 1.0 / (double) m_samples_per_octave);
 
     double cumulative_sum(int v, int start);
 
     size_t index_of_period(period_type period);
 
     std::vector<period_type> periods_of(const std::map<period_type, std::vector<phase_type>> &phase, phase_type i1);
+
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
