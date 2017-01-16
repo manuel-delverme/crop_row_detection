@@ -4,7 +4,7 @@
 #include "ImagePreprocessor.h"
 #include "CropRowDetector.h"
 
-#define DEBUG 1
+#define DEBUG 0
 void display_img(cv::Mat image){
     cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     cv::imshow("Display Image", image);

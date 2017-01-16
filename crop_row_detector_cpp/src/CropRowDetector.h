@@ -15,21 +15,19 @@ struct data_type{
     phase_type c;
     period_type d;
 };
-template <class T>
-inline void hash_pair(std::size_t& hash, const T& p){
-    std::hash<T> hash_func;
-    hash ^= hash_func(p) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+namespace std
+{
+    template<>
+    struct hash<std::pair<phase_type, period_type>> {
+        inline size_t operator()(const std::pair<phase_type, period_type> &p) const {
+            const size_t m_max_d = 256;
+            size_t h, h2;
+            h = ((uint) (p.first + m_max_d / 2)) << 16;
+            h2 = (uint) std::floor(p.second * 100) & 0x0000ffff;
+            return h+h2;
+        }
+    };
 }
-
-template<typename S, typename T>
-struct std::hash< std::pair<S, T> >{
-    inline size_t operator()(const std::pair<S,T>& p) const{
-        size_t hash = 0;
-        hash_pair(hash, p.first);
-        hash_pair(hash, p.second);
-        return hash;
-    }
-};
 
 class CropRowDetector{
     // int width;
@@ -60,7 +58,8 @@ private:
     const float m_f_low = 1.0;
     const float m_lambda_c = 0.5f;
     const float m_lambda_d = 0.2f;
-    const uint m_min_d = 8;
+    const period_type m_min_d = 8;
+    const period_type m_max_d = 256;
     const uint m_samples_per_octave = 8;
     const uint m_n_octaves = 5;
     const double m_d_step = std::pow(2.0, 1.0 / (double) m_samples_per_octave);

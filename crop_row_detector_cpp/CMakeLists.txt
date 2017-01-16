@@ -21,9 +21,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
     -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing \
     -pedantic \
     -Ofast \
-    -ggdb3 \
 ")
 
+# -ggdb3 \
 # -Og \
 # -Ofast \
 # -Werror \
