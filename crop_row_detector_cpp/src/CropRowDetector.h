@@ -13,7 +13,7 @@ struct data_type{
     double B;
     double minBV;
     phase_type c;
-    period_type d;
+    size_t d;
 };
 namespace std
 {
@@ -23,7 +23,7 @@ namespace std
             const size_t m_max_d = 256;
             size_t h, h2;
             h = ((uint) (p.first + m_max_d / 2)) << 16;
-            h2 = (uint) std::floor(p.second * 100) & 0x0000ffff;
+            h2 = (uint) ((uint) std::floor(p.second * 100)) & 0x0000ffff;
             return h+h2;
         }
     };
