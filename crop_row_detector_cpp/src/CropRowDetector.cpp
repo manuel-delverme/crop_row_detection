@@ -264,10 +264,9 @@ std::vector<tuple_type> CropRowDetector::find_best_parameters(std::vector<std::m
             for (size_t period_idx = 0; period_idx < m_nd; period_idx++) {
                 period = periods[period_idx];
                 // intersection_points = new double[length+1];
-                std::vector<double> intersection_points_test(length+1);
-                std::vector<phase_type> parabola_centers_phase(length);
+                double* intersection_points_test = new double[length + 1];
+                phase_type* parabola_centers_phase = new phase_type[length];
                 double intersection_point;
-                // phase_range_offset = -phases.at(0);
 
                 phase_type half_band = (phase_type) round(0.5 * period);
                 parabola_idx = 0;
