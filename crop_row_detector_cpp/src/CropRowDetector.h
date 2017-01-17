@@ -6,7 +6,7 @@
 #define NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
 
 typedef int phase_type;
-typedef float period_type;
+typedef double period_type;
 typedef std::pair<phase_type, period_type> tuple_type;
 
 struct data_type{
@@ -47,6 +47,13 @@ public:
             std::map<period_type, std::vector<phase_type>> Xs, const double positive_pulse_width,
     const double negative_pulse_width, const size_t window_width);
 
+    const period_type m_mind = 8;
+    const uint m_ndOctaves = 5;
+    const uint m_ndSamplesPerOctave = 70;
+    const double m_dstep = std::pow(2.0, 1.0 / (double) m_ndSamplesPerOctave);
+    const int m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
+    const int m_nc = (int) floor((double)m_mind * pow(m_dstep, m_nd-1)) + 1;
+
 private:
     cv::Mat m_integral_image;
     // std::vector<period_type> m_period_map;
@@ -54,18 +61,15 @@ private:
     double m_half_width;
     double m_period_scale_factor;
 
-    const float m_maxD = 1.0;
     const float m_f_low = 1.0;
+    const float m_maxD = 0.5;
     const float m_lambda_c = 0.5f;
     const float m_lambda_d = 0.2f;
-    const period_type m_min_d = 8;
-    const period_type m_max_d = 256;
-    const uint m_samples_per_octave = 8;
-    const uint m_n_octaves = 5;
-    const double m_d_step = std::pow(2.0, 1.0 / (double) m_samples_per_octave);
+
+    const double m_last_period = m_mind * std::pow(m_dstep, m_nd-1);
 
     double cumulative_sum(int v, int start);
 
-    std::vector<period_type> periods_of(const std::map<period_type, std::vector<phase_type>> &phase, phase_type i1);
+    period_type period_min(const phase_type phase);
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H

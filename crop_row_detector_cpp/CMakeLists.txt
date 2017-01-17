@@ -18,13 +18,17 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
     -Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith \
     -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
     -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
-    -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing \
-    -pedantic \
     -Ofast \
+    -O2 \
+    -pedantic \
+    -pipe \
+    -march=native \
+    -fopenmp \
 ")
 
-# -ggdb3 \
 # -Og \
+# -pthread \
+# -ftree-parallelize-loops=5 \
 # -Ofast \
 # -Werror \
 # -ggdb3 \

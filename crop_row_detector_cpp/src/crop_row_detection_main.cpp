@@ -45,16 +45,14 @@ void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<tuple_type
     display_img(temp_image);
 }
 
-std::map<period_type, std::vector<phase_type>> get_Xs(period_type d_min, uint n_samples_per_octave, uint n_octaves) {
+std::map<period_type, std::vector<phase_type>>
+get_Xs(const period_type m_mind, const size_t n_periods, const double m_dstep) {
     std::map<period_type, std::vector<phase_type>> Xs;
     std::vector<phase_type> phases;
-    period_type period;
-
-    uint n_samples = n_samples_per_octave * n_octaves;
-    for (uint sample_number = 0; sample_number <= n_samples; sample_number++) { // periods
+    period_type period = m_mind;
+    for (size_t period_idx = 0; period_idx < n_periods; period_idx++, period *= m_dstep) {
         phases.clear();
-        period = (period_type) (d_min * std::pow(2.f, (double) sample_number / (double) n_samples_per_octave));
-        period = std::trunc(period * 100000) / 100000;
+        // period = std::trunc(period * 100000) / 100000;
         int half_band = (int) round(0.5 * period);
 
         for (int phase = -half_band; phase < half_band; phase++) {
@@ -145,20 +143,21 @@ int main(int argc, char** argv){
     CropRowDetector row_detector = CropRowDetector();
     std::map<period_type, std::vector<phase_type>> Xs;
 #if !DEBUG
-    Xs = get_Xs((period_type) settings["d_min"], (uint) settings["n_samples_per_octave"], (uint) settings["n_octaves"]);
+    Xs = get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
 #endif
     std::vector<std::map<tuple_type, double>> energy_map((size_t) image_size.height);
     std::vector<cv::Mat> data = preprocessor.process();
 
     for (cv::Mat& pIntensityImg : data) {
 
-        std::clock_t start = std::clock();
 #if DEBUG
         energy_map = load_match_results_from_csv(Xs);
 #else
         row_detector.load(pIntensityImg);
         std::vector<tuple_type> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs, settings["a0"], settings["b0"], (size_t) settings["width"]);
 #endif
+        std::clock_t start = std::clock();
+        std::cout << "START" << std::endl;
         std::vector<tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
         std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 #if !DEBUG
