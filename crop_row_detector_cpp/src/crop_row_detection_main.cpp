@@ -14,12 +14,12 @@ void display_img(cv::Mat image){
     cv::destroyWindow("Display Image");
 }
 
-void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<tuple_type> &match_results) {
+void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<old_tuple_type> &match_results) {
     cv::Mat temp_image;
     cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
     size_t image_height = (size_t) pIntensityImg.size[0];
     size_t image_width = (size_t) pIntensityImg.size[1];
-    tuple_type x;
+    old_tuple_type x;
 
     for (size_t image_row_num = 0; image_row_num < image_height; image_row_num++) {
             x = match_results.at(image_row_num);
@@ -64,8 +64,8 @@ get_Xs(const period_type m_mind, const size_t n_periods, const double m_dstep) {
     return Xs;
 }
 
-std::vector<std::map<tuple_type, double>> load_match_results_from_csv(std::map<period_type, std::vector<phase_type>>& Xs) {
-    std::vector<std::map<tuple_type, double>> energy_map;
+std::vector<std::map<old_tuple_type, double>> load_match_results_from_csv(std::map<period_type, std::vector<phase_type>>& Xs) {
+    std::vector<std::map<old_tuple_type, double>> energy_map;
     std::ifstream csv_stream("../energy_by_row.csv");
     std::string row;
 
@@ -78,7 +78,7 @@ std::vector<std::map<tuple_type, double>> load_match_results_from_csv(std::map<p
     double score;
     phase_type phase;
     period_type period;
-    tuple_type x;
+    old_tuple_type x;
     std::vector<phase_type> phases;
     bool save_Xs = true;
 
@@ -109,7 +109,7 @@ std::vector<std::map<tuple_type, double>> load_match_results_from_csv(std::map<p
                 save_Xs = false;
             }
             old_row_number = row_number;
-            energy_map.push_back(std::map<tuple_type, double>()); // add a new row to the structure
+            energy_map.push_back(std::map<old_tuple_type, double>()); // add a new row to the structure
             phases.clear(); // just in case two rows have the same phase
         }
 
@@ -145,7 +145,7 @@ int main(int argc, char** argv){
 #if !DEBUG
     Xs = get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
 #endif
-    std::vector<std::map<tuple_type, double>> energy_map((size_t) image_size.height);
+    std::vector<std::map<old_tuple_type, double>> energy_map((size_t) image_size.height);
     std::vector<cv::Mat> data = preprocessor.process();
 
     for (cv::Mat& pIntensityImg : data) {
@@ -154,11 +154,11 @@ int main(int argc, char** argv){
         energy_map = load_match_results_from_csv(Xs);
 #else
         row_detector.load(pIntensityImg);
-        std::vector<tuple_type> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs, settings["a0"], settings["b0"], (size_t) settings["width"]);
+        std::vector<old_tuple_type> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs, settings["a0"], settings["b0"], (size_t) settings["width"]);
 #endif
         std::clock_t start = std::clock();
         std::cout << "START" << std::endl;
-        std::vector<tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
+        std::vector<data_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
         std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 #if !DEBUG
         // plot_template_matching(pIntensityImg, match_results);

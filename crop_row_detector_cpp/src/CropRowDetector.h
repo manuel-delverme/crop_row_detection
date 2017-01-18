@@ -7,7 +7,8 @@
 
 typedef int phase_type;
 typedef double period_type;
-typedef std::pair<phase_type, period_type> tuple_type;
+typedef std::pair<phase_type, period_type> old_tuple_type;
+typedef std::pair<phase_type, size_t> tuple_type;
 
 struct data_type{
     double B;
@@ -18,13 +19,13 @@ struct data_type{
 namespace std
 {
     template<>
-    struct hash<std::pair<phase_type, period_type>> {
-        inline size_t operator()(const std::pair<phase_type, period_type> &p) const {
+    struct hash<std::pair<phase_type, size_t>> {
+        inline size_t operator()(const std::pair<phase_type, size_t> &p) const {
             const size_t m_max_d = 256;
             size_t h, h2;
-            h = ((uint) (p.first + m_max_d / 2)) << 16;
-            h2 = (uint) ((uint) std::floor(p.second * 100)) & 0x0000ffff;
-            return h+h2;
+            h = ((uint) (p.first + m_max_d / 2));
+            h2 = (uint) ((uint) p.second) & 0x0000ffff;
+            return h*m_max_d+h2;
         }
     };
 }
@@ -36,14 +37,14 @@ public:
     CropRowDetector();
 
     void load(const cv::Mat& intensity);
-    double CrossCorrelation(int row_number, tuple_type template_var_param, double positive_pulse_width,
+    double CrossCorrelation(int row_number, old_tuple_type template_var_param, double positive_pulse_width,
                             double negative_pulse_width, size_t image_width);
 
-    std::vector<tuple_type> find_best_parameters(std::vector<std::map<tuple_type, double>> energy_map,
+    std::vector<data_type> find_best_parameters(std::vector<std::map<old_tuple_type, double>> energy_map,
                                                  const std::map<period_type, std::vector<phase_type>> &Xs);
 
-    std::vector<tuple_type>
-    template_matching(std::vector<std::map<tuple_type, double>> &energy_map, const cv::Mat &Intensity,
+    std::vector<old_tuple_type>
+    template_matching(std::vector<std::map<old_tuple_type, double>> &energy_map, const cv::Mat &Intensity,
             std::map<period_type, std::vector<phase_type>> Xs, const double positive_pulse_width,
     const double negative_pulse_width, const size_t window_width);
 
@@ -51,7 +52,7 @@ public:
     const uint m_ndOctaves = 5;
     const uint m_ndSamplesPerOctave = 70;
     const double m_dstep = std::pow(2.0, 1.0 / (double) m_ndSamplesPerOctave);
-    const int m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
+    const uint m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
     const int m_nc = (int) floor((double)m_mind * pow(m_dstep, m_nd-1)) + 1;
 
 private:
@@ -70,6 +71,6 @@ private:
 
     double cumulative_sum(int v, int start);
 
-    period_type period_min(const phase_type phase);
+    size_t period_min(const phase_type phase, std::vector<period_type> periods);
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
