@@ -14,7 +14,7 @@ struct data_type{
     double B;
     double minBV;
     phase_type c;
-    size_t d;
+    int d;
 };
 namespace std
 {
@@ -37,11 +37,11 @@ public:
     CropRowDetector();
 
     void load(const cv::Mat& intensity);
+    void teardown();
     double CrossCorrelation(int row_number, old_tuple_type template_var_param, double positive_pulse_width,
                             double negative_pulse_width, size_t image_width);
 
-    std::vector<old_tuple_type> find_best_parameters(std::vector<std::map<old_tuple_type, double>> &energy_map,
-                                                const std::map<period_type, std::vector<phase_type>> &Xs);
+    std::vector<old_tuple_type> find_best_parameters(std::vector<std::map<old_tuple_type, double>> &energy_map);
 
     std::vector<old_tuple_type>
     template_matching(std::vector<std::map<old_tuple_type, double>> &energy_map, const cv::Mat &Intensity,
@@ -63,7 +63,7 @@ private:
     double m_period_scale_factor;
 
     const float m_f_low = 1.0;
-    const float m_maxD = 0.5;
+    const float m_maxD = 1.5;
     const float m_lambda_c = 0.5f;
     const float m_lambda_d = 0.2f;
 
@@ -72,5 +72,7 @@ private:
     double cumulative_sum(int v, int start);
 
     size_t period_min(const phase_type phase, std::vector<period_type> periods);
+
+    data_type *m_dataset_ptr;
 };
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H

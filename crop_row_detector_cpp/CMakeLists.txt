@@ -3,7 +3,7 @@ project(NEW_crop_row_detection)
 cmake_minimum_required (VERSION 2.8)
 cmake_policy(SET CMP0015 NEW)
 
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 # if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
 #    set(CMAKE_BUILD_TYPE "Debug")
 # endif()
@@ -18,6 +18,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} \
     -Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith \
     -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
     -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
+    -g \
     -O0 \
     -pipe \
     -march=native \
@@ -39,7 +40,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
 
 # -Og \
 # -pthread \
-# -ftree-parallelize-loops=5 \
 # -Ofast \
 # -Werror \
 # -ggdb3 \

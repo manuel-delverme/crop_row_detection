@@ -53,7 +53,7 @@ cv::Mat ImagePreprocessor::convertToExG(cv::Mat &image){
 };
 std::vector<cv::Mat> ImagePreprocessor::process(){
     std::vector<cv::Mat> images;
-    cv::String path(m_images_folder + "*"); //select only jpg
+    cv::String path(m_images_folder + "*.jpg");
     std::vector<cv::String> file_names;
     cv::glob(path, file_names, true); // recurse
 

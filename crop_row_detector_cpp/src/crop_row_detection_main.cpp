@@ -4,6 +4,7 @@
 #include "ImagePreprocessor.h"
 #include "CropRowDetector.h"
 
+
 #define DEBUG 0
 void display_img(cv::Mat image){
     cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
@@ -26,7 +27,7 @@ void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<old_tuple_
             phase_type phase = x.first;
             period_type period = x.second;
             period_type center_of_image = (period_type) std::round(image_width / 2);
-            std::cout << image_row_num << " " << phase << "," << period << std::endl;
+            // std::cout << image_row_num << " " << phase << "," << period << std::endl;
             period_type column = center_of_image + (period_type) phase;
             while(column < image_width) {
                 cv::Vec3b &pPixel = temp_image.at<cv::Vec3b>((int) image_row_num,(int) column);
@@ -165,9 +166,9 @@ int main(int argc, char** argv){
     settings["b0"] = 4.48;
     settings["width"] = 400;
     settings["height"] = 300;
-    settings["d_min"] = 8;
-    settings["n_samples_per_octave"] = 70;
-    settings["n_octaves"] = 5;
+    // settings["d_min"] = 8;
+    // settings["n_samples_per_octave"] = 70;
+    // settings["n_octaves"] = 5;
 
     cv::Size image_size = cv::Size((uint) settings["width"], (uint) settings["height"]);
     ImagePreprocessor preprocessor (argv[1], image_size);
@@ -179,9 +180,9 @@ int main(int argc, char** argv){
 #endif
 
     std::vector<std::map<old_tuple_type, double>> energy_map((size_t) image_size.height);
-    std::vector<cv::Mat> data = preprocessor.process();
+    std::vector<cv::Mat> images = preprocessor.process();
 
-    for (cv::Mat& pIntensityImg : data) {
+    for (cv::Mat& pIntensityImg : images) {
 
 #if DEBUG
         energy_map = load_match_results_from_csv(Xs);
@@ -191,7 +192,7 @@ int main(int argc, char** argv){
 #endif
         std::clock_t start = std::clock();
         std::cout << "START" << std::endl;
-        std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
+        std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map);
         std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 #if !DEBUG
         // plot_template_matching(pIntensityImg, match_results);
@@ -199,6 +200,7 @@ int main(int argc, char** argv){
         plot_template_matching(pIntensityImg, min_energy_results);
 
     }
+    row_detector.teardown();
     std::cout << "done" << std::endl;
     return 0;
 }
