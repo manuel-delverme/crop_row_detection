@@ -45,6 +45,38 @@ void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<old_tuple_
     display_img(temp_image);
 }
 
+
+void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<tuple_type> &match_results) {
+    cv::Mat temp_image;
+    cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
+    size_t image_height = (size_t) pIntensityImg.size[0];
+    size_t image_width = (size_t) pIntensityImg.size[1];
+    old_tuple_type x;
+
+    for (size_t image_row_num = 0; image_row_num < image_height; image_row_num++) {
+        x = match_results.at(image_row_num);
+        phase_type phase = x.first;
+        period_type period = x.second;
+        period_type center_of_image = (period_type) std::round(image_width / 2);
+        std::cout << image_row_num << " " << phase << "," << period << std::endl;
+        period_type column = center_of_image + (period_type) phase;
+        while(column < image_width) {
+            cv::Vec3b &pPixel = temp_image.at<cv::Vec3b>((int) image_row_num,(int) column);
+            pPixel[2] = 255;
+            column += period;
+        }
+
+        column = center_of_image + (period_type) phase - period;
+        while(column >= 0) {
+            cv::Vec3b& pPixel = temp_image.at<cv::Vec3b>((int) image_row_num,(int) column);
+            // std::cerr << "<drawing on: " << column << std::endl;
+            pPixel[2] = 255;
+            column -= period;
+        }
+    }
+    display_img(temp_image);
+}
+
 std::map<period_type, std::vector<phase_type>>
 get_Xs(const period_type m_mind, const size_t n_periods, const double m_dstep) {
     std::map<period_type, std::vector<phase_type>> Xs;
@@ -145,6 +177,7 @@ int main(int argc, char** argv){
 #if !DEBUG
     Xs = get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
 #endif
+
     std::vector<std::map<old_tuple_type, double>> energy_map((size_t) image_size.height);
     std::vector<cv::Mat> data = preprocessor.process();
 
@@ -158,12 +191,12 @@ int main(int argc, char** argv){
 #endif
         std::clock_t start = std::clock();
         std::cout << "START" << std::endl;
-        std::vector<data_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
+        std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
         std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 #if !DEBUG
-        // plot_template_matching(pIntensityImg, match_results);
+        plot_template_matching(pIntensityImg, match_results);
 #endif
-        // plot_template_matching(pIntensityImg, min_energy_results);
+        plot_template_matching(pIntensityImg, min_energy_results);
 
     }
     std::cout << "done" << std::endl;
