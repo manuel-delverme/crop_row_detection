@@ -12,7 +12,7 @@ class ImagePreprocessor{
         std::vector<cv::Mat> process();
     private:
         cv::Size m_size;
-        std::string m_images_folder;
+        std::string m_images_folder = "";
         cv::Mat convertToExG(cv::Mat&);
 };
 

@@ -21,7 +21,7 @@ namespace std
     template<>
     struct hash<std::pair<phase_type, size_t>> {
         inline size_t operator()(const std::pair<phase_type, size_t> &p) const {
-            const size_t m_max_d = 256;
+            const int m_max_d = 256;
             size_t h, h2;
             h = ((uint) (p.first + m_max_d / 2));
             h2 = (uint) ((uint) p.second) & 0x0000ffff;
@@ -40,8 +40,8 @@ public:
     double CrossCorrelation(int row_number, old_tuple_type template_var_param, double positive_pulse_width,
                             double negative_pulse_width, size_t image_width);
 
-    std::vector<data_type> find_best_parameters(std::vector<std::map<old_tuple_type, double>> energy_map,
-                                                 const std::map<period_type, std::vector<phase_type>> &Xs);
+    std::vector<old_tuple_type> find_best_parameters(std::vector<std::map<old_tuple_type, double>> &energy_map,
+                                                const std::map<period_type, std::vector<phase_type>> &Xs);
 
     std::vector<old_tuple_type>
     template_matching(std::vector<std::map<old_tuple_type, double>> &energy_map, const cv::Mat &Intensity,
