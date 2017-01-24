@@ -235,9 +235,11 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
         periods[period_idx] = period;
     }
 
+    std::unordered_map<tuple_type, data_type> *data_row;
     for (size_t row_number = 0; row_number < image_height; row_number++) {
         // std::cout << "working on row " << row_number << std::endl;
         //TODO: take it from template_matching
+        data_row = &dataset.at(row_number);
         Dnrm = std::max_element(std::begin(energy_map.at(row_number)), std::end(energy_map.at(row_number)), comparer)->second;
 
         size_t period_idx = 0;
@@ -271,7 +273,7 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
                 p.c = phase;
                 p.d = period_idx;
                 p.minBV = INT_MAX;
-                dataset.at(row_number)[x] = p;
+                data_row->insert(std::make_pair(x,p));
                 // std::cout << p.B << std::endl;
             }
             period_idx++;
@@ -291,11 +293,11 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
                 intersection_points_phase[1] = +INFINITY;
 
                 for (phase_type phase=-half_band + 1; phase < half_band; phase++) {
-                    const data_type x = dataset.at(row_number).at(std::make_pair(phase, period_idx));
+                    const data_type x = data_row->at(std::make_pair(phase, period_idx));
                     numerator = x.B + m_lambda_c * (double)(phase * phase);
 
                     while(true){
-                        const auto vk = dataset.at(row_number).at(std::make_pair(parabola_centers_phase[parabola_idx], period_idx));
+                        const auto vk = data_row->at(std::make_pair(parabola_centers_phase[parabola_idx], period_idx));
                         intersection_point = numerator - (vk.B + m_lambda_c * std::pow(parabola_centers_phase[parabola_idx], 2));
                         intersection_point /= 2.0 * m_lambda_c * (phase - parabola_centers_phase[parabola_idx]);
 
@@ -313,11 +315,11 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
 
                 parabola_idx = 0;
                 for (phase_type phase=-half_band; phase < half_band; phase++) {
-                    auto x = &dataset.at(row_number).find(std::make_pair(phase, period_idx))->second;
+                    auto x = &data_row->find(std::make_pair(phase, period_idx))->second;
                     while (intersection_points_phase.at(parabola_idx + 1) < (double) phase) {
                         parabola_idx++;
                     }
-                    const auto vk = dataset.at(row_number).at(std::make_pair(parabola_centers_phase[parabola_idx], period_idx));
+                    const auto vk = data_row->at(std::make_pair(parabola_centers_phase[parabola_idx], period_idx));
                     const double phase_dist = phase - parabola_centers_phase[parabola_idx];
                     x->minBV = vk.B + m_lambda_c * phase_dist * phase_dist;
                     x->c = parabola_centers_phase[parabola_idx];
@@ -339,11 +341,11 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
 
                 for (period_idx = p_min_idx+1; period_idx < m_nd; period_idx++) {
                     period = periods[period_idx];
-                    auto const x = dataset.at(row_number).at(std::make_pair(phase, period_idx));
+                    auto const x = data_row->at(std::make_pair(phase, period_idx));
                     numerator = x.minBV + m_lambda_d * (double) (period * period);
 
                     while (true) {
-                        const auto vk = dataset.at(row_number).at(std::make_pair(phase, parabola_centers_period_idx[parabola_idx]));
+                        const auto vk = data_row->at(std::make_pair(phase, parabola_centers_period_idx[parabola_idx]));
                         intersection_point = numerator - (vk.minBV + m_lambda_d * std::pow(parabola_centers_period[parabola_idx], 2));
                         intersection_point /= 2.0 * m_lambda_d * (period - parabola_centers_period[parabola_idx]);
 
@@ -366,10 +368,10 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
                     while (intersection_points[parabola_idx + 1] < (double) period) {
                         parabola_idx++;
                     }
-                    const auto vk = dataset.at(row_number).at(std::make_pair(phase, parabola_centers_period_idx[parabola_idx]));
+                    const auto vk = data_row->at(std::make_pair(phase, parabola_centers_period_idx[parabola_idx]));
                     const double period_dist = period - parabola_centers_period[parabola_idx];
 
-                    auto x = &dataset.at(row_number).find(std::make_pair(phase, period_idx))->second;
+                    auto x = &data_row->find(std::make_pair(phase, period_idx))->second;
                     x->minBV = vk.B + m_lambda_d * period_dist * period_dist;
                     if(x->c != vk.c){
                         x->c = vk.c;
@@ -384,14 +386,14 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
     size_t row_number = image_height - 1;
 
     data_type best_node, node;
-    best_node.B = dataset.at(row_number).at(std::make_pair(0, 0)).B;
+    best_node.B = data_row->at(std::make_pair(0, 0)).B;
 
     size_t period_idx = 0;
     for(std::pair<period_type, std::vector<phase_type>> const& item: Xs){
         // const period_type period = item.first;
         phases = item.second;
         for(phase_type phase: phases) {
-            node = dataset.at(row_number).at(std::make_pair(phase, period_idx));
+            node = data_row->at(std::make_pair(phase, period_idx));
             if(node.B < best_node.B)
             {
                 best_node = node;
@@ -409,11 +411,11 @@ std::vector<data_type> CropRowDetector::find_best_parameters(std::vector<std::ma
         best_phase = best_node.c;
         best_period_idx = best_node.d;
 
-        best_node = dataset.at(row_number).at(std::make_pair(best_node.c, best_node.d));
+        best_node = data_row->at(std::make_pair(best_node.c, best_node.d));
         best_nodes.at(row_number) = best_node;
 
-        // double x = dataset.at(row_number).at(best_node).minBV;
-        std::cout << "row: " << row_number - 1 << " phase: " << best_node.c << " period:" << best_node.d << std::endl;
+        // double x = data_row.at(best_node).minBV;
+        std::cout << "row: " << row_number << " phase: " << best_node.c << " period:" << best_node.d << std::endl;
     }
     delete[] intersection_points;
     delete[] parabola_centers_period;
