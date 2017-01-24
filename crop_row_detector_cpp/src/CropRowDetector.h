@@ -49,11 +49,11 @@ public:
     const double negative_pulse_width, const size_t window_width);
 
     const period_type m_mind = 8;
-    const uint m_ndOctaves = 5;
-    const uint m_ndSamplesPerOctave = 70;
+    const int m_ndOctaves = 5;
+    const int m_ndSamplesPerOctave = 70;
     const double m_dstep = std::pow(2.0, 1.0 / (double) m_ndSamplesPerOctave);
-    const uint m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
-    const int m_nc = (int) floor((double)m_mind * pow(m_dstep, m_nd-1)) + 1;
+    const int m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
+    const int m_nc = (int) floor((double)m_mind * pow(m_dstep, m_nd)) + 1;
 
 private:
     cv::Mat m_integral_image;

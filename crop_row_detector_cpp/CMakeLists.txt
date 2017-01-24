@@ -3,7 +3,7 @@ project(NEW_crop_row_detection)
 cmake_minimum_required (VERSION 2.8)
 cmake_policy(SET CMP0015 NEW)
 
-# set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 # if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
 #    set(CMAKE_BUILD_TYPE "Debug")
 # endif()

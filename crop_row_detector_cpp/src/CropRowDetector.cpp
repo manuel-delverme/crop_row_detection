@@ -180,7 +180,7 @@ double CropRowDetector::CrossCorrelation(int row_number, old_tuple_type template
         negative_pulse_end = negative_pulse_start + b - 1;
 
         if(negative_pulse_end >= image_width)
-            negative_pulse_end = image_width - 1;
+            negative_pulse_end = (int) (image_width - 1);
 
         negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
                                       -cumulative_sum(row_number, negative_pulse_start-1);
@@ -209,146 +209,122 @@ std::vector<old_tuple_type> CropRowDetector::find_best_parameters(std::vector<st
     // std::vector<std::map<tuple_type, data_type>> dataset(image_height);
 
     // TODO: reserve space for hashmaps
-    std::vector<std::unordered_map<tuple_type, data_type>> dataset(image_height);
+    data_type* dataset = new data_type[image_height * m_nd * m_nc];
 
-    std::vector<phase_type> all_the_phases = Xs.rbegin()->second;
     std::vector<old_tuple_type> best_nodes(image_height);
 
     auto comparer = [] (const auto & p1, const auto & p2) { return p1.second < p2.second;};
     double Dnrm;
     std::vector<phase_type> phases;
 
-    int parabola_idx;
+    int k;
     // size_t length = (size_t) Xs.rbegin()->first;
     size_t length = (size_t) std::max(Xs.size(), (size_t) Xs.rbegin()->first);
 
-    // phase_type* parabola_centers_phase = new phase_type[length];
-    period_type parabola_centers_period[length];
+    // phase_type* v_ = new phase_type[length];
+    std::vector<period_type> v__(length);
     size_t* parabola_centers_period_idx = new size_t[length];
     double *intersection_points = new double[length+1];
-    std::vector<double> intersection_points_phase(length+1);
-    std::vector<phase_type> parabola_centers_phase(length);
+    // std::vector<double> z(length+1);
+    std::vector<double> z(length+1);
+    std::vector<phase_type> v_(length);
 
     double numerator;
     double b_val;
 
     std::vector<period_type> periods((size_t) m_nd);
     period_type period = m_mind;
+
+    data_type *DP_ = dataset;
+    data_type *pDP;
+    data_type *DP__;
+    double s;
+    size_t id;
+    phase_type c;
+    double d;
+    int n = m_nc * m_nd;
+
     for (size_t period_idx = 0; period_idx < m_nd; period_idx++, period *= m_dstep) {
         periods[period_idx] = period;
     }
 
     for (size_t row_number = 0; row_number < image_height; row_number++) {
-        // std::cout << "working on row " << row_number << std::endl;
-        //TODO: take it from template_matching
-        Dnrm = std::max_element(std::begin(energy_map.at(row_number)), std::end(energy_map.at(row_number)), comparer)->second;
+        Dnrm = std::max_element(std::begin(energy_map.at(row_number)), std::end(energy_map.at(row_number)), comparer)->second; //TODO: take it from template_matching
 
         size_t period_idx = 0;
-        for (std::pair<period_type, std::vector<phase_type>> const &item: Xs) {
-            period = item.first;
-            if(period != periods[period_idx]){
-                // std::cout << "replacing " << periods[period_idx] << " with " << period << std::endl;
-                periods[period_idx] = period; // HACK FOR csv generated
-            }
-            for (const phase_type phase: item.second) {
-                const old_tuple_type x_energy = std::make_pair(phase, period);
-                const tuple_type x = std::make_pair(phase, period_idx);
+        DP__ = DP_;        // DP__ - ptr. to the first data in a block row
+
+        for(id = 0; id < m_nd; id++, DP__ += m_nc) {
+            pDP = DP__;
+
+            for (c = -m_nc / 2; c < m_nc / 2; c++, pDP++) {
+                const period_type period_ = periods[period_idx];
+                const phase_type half_band = (phase_type) std::floor(0.5 * period_);
+                const phase_type real_phase = (std::abs(c + half_band) % (int) std::floor(period_)) - half_band;
+                const old_tuple_type x_energy = std::make_pair(real_phase, period_);
 
                 auto D = energy_map.at(row_number).at(x_energy);
-                if(Dnrm >= m_f_low)
-                {
-                    b_val = 1.0 - D / Dnrm;
-                    // B.at(row_number).at(x) = 1.0 - energy_map.at(row_number).at(x) / Dnrm;
+                if (Dnrm >= 1.0) {
+                    pDP->B = 1.0 - D / Dnrm;
 
-                    if(b_val > m_maxD){
-                        b_val = m_maxD;
-                    }
-                } else {
-                    b_val = m_maxD;
+                    if (pDP->B > m_maxD)
+                        pDP->B = m_maxD;
+                } else{
+                    pDP->B = m_maxD;
                 }
-
-                if(row_number > 0){
-                    b_val += dataset.at(row_number - 1).at(x).minBV;
+                if (row_number > 0){
+                    std::cout << c << " " << period_ << std::endl;
+                    pDP->B += (pDP - n)->minBV;
                 }
-                data_type p;
-                p.B = b_val;
-                p.c = phase;
-                p.d = period_idx;
-                p.minBV = INT_MAX;
-                dataset.at(row_number)[x] = p;
             }
-            period_idx++;
         }
         if(row_number < image_height - 1) {
-            // #pragma omp parallel for default(none) private(period, parabola_idx, numerator) shared(periods, dataset, row_number, length)
-            for (size_t period_idx = 0; period_idx < m_nd; period_idx++) {
-                period = periods[period_idx];
-                // intersection_points = new double[length+1];
-                double intersection_point;
+            // #pragma omp parallel for default(none) private(period, k, numerator) shared(periods, dataset, row_number, length)
+            DP__ = DP_;
+            double maxz;
+            maxz = (1.0 + m_lambda_c * (double)(m_nc * m_nc)) / (2.0 * m_lambda_c);
+            for(id = 0; id < m_nd; id++, DP__ += m_nc)
+            {
+                // period = periods[period_idx];
+                k = 0;
+                v_[0] = -m_nc/2;
+                z[0] = -maxz;
+                z[1] = +maxz;
+                pDP = DP__ + 1;
 
-                phase_type half_band = (phase_type) std::floor(0.5 * period);
-                parabola_idx = 0;
+                for(c = -m_nc/2 + 1; c < m_nc/2; c++, pDP++)
+                {
+                    while(true)
+                    {
+                        s = ((pDP->B + m_lambda_c * (double)(c * c)) - (DP__[v_[k] + m_nc / 2].B + m_lambda_c * (double)(v_[k] * v_[k]))) /
+                            (2.0 * m_lambda_c * (double)(c - v_[k]));
 
-                parabola_centers_phase[0] = -half_band;
-                intersection_points_phase[0] = -INFINITY;
-                intersection_points_phase[1] = +INFINITY;
-
-                for (phase_type phase = -half_band + 1; phase < half_band; phase++) {
-                    const data_type x = dataset.at(row_number).at(std::make_pair(phase, period_idx));
-                    numerator = x.B + m_lambda_c * (double) (phase * phase);
-
-                    while (true) {
-                        auto vkx = std::make_pair(parabola_centers_phase[parabola_idx], period_idx);
-                        const auto vk = dataset.at(row_number).at(vkx);
-                        intersection_point =
-                                numerator - (vk.B + m_lambda_c * std::pow(parabola_centers_phase[parabola_idx], 2));
-                        intersection_point /= 2.0 * m_lambda_c * (phase - parabola_centers_phase[parabola_idx]);
-
-                        if (intersection_point <= intersection_points_phase[parabola_idx]) {
-                            parabola_idx--;
-                        } else {
+                        if(s <= z[k])
+                            k--;
+                        else
                             break;
-                        }
                     }
-                    parabola_idx++;
-                    parabola_centers_phase[parabola_idx] = phase;
-                    intersection_points_phase[parabola_idx] = intersection_point;
-                    intersection_points_phase[parabola_idx + 1] = +INFINITY;
+
+                    k++;
+
+                    v_[k] = c;
+                    z[k] = s;
+                    z[k + 1] = maxz;
                 }
+                k = 0;
+                pDP = DP__;
 
-                parabola_idx = 0;
-                for (phase_type phase = -half_band; phase < half_band; phase++) {
-                    auto x = &dataset.at(row_number).find(std::make_pair(phase, period_idx))->second;
-                    while (intersection_points_phase.at(parabola_idx + 1) < (double) phase) {
-                        parabola_idx++;
+                for(c = -m_nc / 2; c < m_nc / 2; c++, pDP++)
+                {
+                    while(z[k + 1] < (double)c)
+                    {
+                        k++;
                     }
-                    const auto vk = dataset.at(row_number).at(
-                            std::make_pair(parabola_centers_phase[parabola_idx], period_idx));
-                    const double phase_dist = phase - parabola_centers_phase[parabola_idx];
-                    x->minBV = vk.B + m_lambda_c * phase_dist * phase_dist;
-                    x->c = parabola_centers_phase[parabola_idx];
-                    x->d = period_idx;
-                }
-
-                phase_type real_phase;
-                for (phase_type phase = -m_nc/2; phase < m_nc/2; phase++) {
-                    if (phase >= -half_band && phase < half_band) {
-                        continue;
-                    }
-                    real_phase = ((phase + half_band) % (int) std::floor(period)) - half_band;
-                    if(real_phase == -half_band)
-                        parabola_idx = 0;
-
-                    auto x = &dataset.at(row_number).find(std::make_pair(real_phase, period_idx))->second;
-
-                    while (intersection_points_phase.at((size_t) (parabola_idx + 1)) < (double) real_phase) {
-                        parabola_idx++;
-                    }
-                    const auto vk = dataset.at(row_number).at(std::make_pair(parabola_centers_phase[parabola_idx], period_idx));
-                    const double phase_dist = real_phase - parabola_centers_phase[parabola_idx];
-                    x->minBV = vk.B + m_lambda_c * phase_dist * phase_dist;
-                    x->c = parabola_centers_phase[parabola_idx];
-                    x->d = period_idx;
+                    const double phase_dist = c - v_[k];
+                    pDP->minBV = DP__[v_[k] + m_nc / 2].B + m_lambda_c * phase_dist * phase_dist;
+                    pDP->c = v_[k];
+                    pDP->d = (size_t) id;
+                    //cout << v_[k] + m_nc / 2 << " " << DP__[v_[k] + m_nc / 2].B << " " << pDP->minBV << endl;
                 }
             }
 
@@ -375,92 +351,114 @@ std::vector<old_tuple_type> CropRowDetector::find_best_parameters(std::vector<st
             // ----------------------------------------------------------------------------------------------------
 
             // std::cout << "done; working on periods" << std::endl;
+            maxz = (1.0 + m_lambda_d * (double)(m_nd * m_nd)) / (2.0 * m_lambda_d);
+            DP__ = DP_;
 
-            for (phase_type phase = -(m_nc / 2); phase < m_nc / 2; phase++) {
-                // std::cout << "phase " << phase << std::endl;
-                double intersection_point;
-                size_t p_min_idx = period_min(phase, periods);
+            for(c = 0; c < m_nc; c++, DP__++)
+            {
+                k = 0;
+                v_[0] = 0; //for saving id
+                v__[0] = (double)m_mind; //for saving d
+                z[0] = -maxz;
+                z[1] = maxz;
 
-                parabola_idx = 0;
-                parabola_centers_period[0] = periods[p_min_idx];
-                parabola_centers_period_idx[0] = p_min_idx;
-                intersection_points[0] = -INFINITY;
-                intersection_points[1] = +INFINITY;
+                pDP = DP__ + m_nc;
 
-                for (period_idx = p_min_idx+1; period_idx < m_nd; period_idx++) {
-                    period = periods[period_idx];
-                    auto const x = dataset.at(row_number).at(std::make_pair(phase, period_idx));
-                    numerator = x.minBV + m_lambda_d * (double) (period * period);
+                d = (double)m_mind;
+                for(id = 1; id < m_nd; id++, pDP += m_nc)
+                {
+                    d *= m_dstep;
+                    while(true)
+                    {
 
-                    while (true) {
-                        const auto vk = dataset.at(row_number).at(std::make_pair(phase, parabola_centers_period_idx[parabola_idx]));
-                        intersection_point = numerator - (vk.minBV + m_lambda_d * std::pow(parabola_centers_period[parabola_idx], 2));
-                        intersection_point /= 2.0 * m_lambda_d * (period - parabola_centers_period[parabola_idx]);
+                        s = ((pDP->minBV + m_lambda_d * d * d) - (DP__[m_nc * v_[k]].minBV + m_lambda_d * v__[k] * v__[k])) /
+                            (2.0 * m_lambda_d * (d - v__[k]));
 
-                        if (intersection_point <= intersection_points[parabola_idx]) {
-                            parabola_idx--;
-                        } else {
+
+                        std::cout << z[k] << " " << k  << " " << DP__[m_nc * v_[k]].minBV << " " << id << std::endl;
+                        if(s <= z[k])
+                            k--;
+                        else
                             break;
-                        }
                     }
-                    parabola_idx++;
-                    parabola_centers_period[parabola_idx] = period;
-                    parabola_centers_period_idx[parabola_idx] = period_idx;
-                    intersection_points[parabola_idx] = intersection_point;
-                    intersection_points[parabola_idx + 1] = +INFINITY;
+                    k++;
+                    v_[k] = id;
+                    v__[k] = d;
+
+                    z[k] = s;
+                    z[k + 1] = maxz;
                 }
-                parabola_idx = 0;
-                for (period_idx = p_min_idx; period_idx < m_nd; period_idx++) {
-                    period = periods[period_idx];
 
-                    while (intersection_points[parabola_idx + 1] < (double) period) {
-                        parabola_idx++;
+                k = 0;
+
+                pDP = DP__;
+
+                d = (double)m_mind;
+                for(id = 0; id < m_nd; id++, pDP += m_nc)
+                {
+                    while(z[k + 1] < d)	{
+                        k++;
                     }
-                    const auto vk = dataset.at(row_number).at(std::make_pair(phase, parabola_centers_period_idx[parabola_idx]));
-                    const double period_dist = period - parabola_centers_period[parabola_idx];
+                    //iTmp = (id - v_[k]);
+                    const double period_dist = d - v__[k];
 
-                    auto x = &dataset.at(row_number).find(std::make_pair(phase, period_idx))->second;
-                    x->minBV = vk.B + m_lambda_d * period_dist * period_dist;
-                    x->c = vk.c;
-                    x->d = parabola_centers_period_idx[parabola_idx];
+                    pDP->minBV = DP__[m_nc * v_[k]].minBV + m_lambda_d * period_dist * period_dist;
+                    pDP->c = DP__[m_nc * v_[k]].c;
+                    pDP->d = (size_t) v_[k];
+
+                    d *= m_dstep;
+
                 }
             }
         }
     }
+    DP_ = dataset + (image_height - 1) * n;
+    DP__ = DP_;
     size_t row_number = image_height - 1;
 
-    data_type best_node, node;
-    best_node.B = dataset.at(row_number).at(std::make_pair(0, 0)).B;
+    data_type* pBestNode = DP__;
 
-    size_t period_idx = 0;
-    for(std::pair<period_type, std::vector<phase_type>> const& item: Xs){
-        // const period_type period = item.first;
-        phases = item.second;
-        for(phase_type phase: phases) {
-            node = dataset.at(row_number).at(std::make_pair(phase, period_idx));
-            if(node.B < best_node.B)
+    data_type *ppp = DP__;
+    for(size_t iter = 0; iter < m_nc*m_nd; iter++, ppp++)
+        std::cout << iter << " " << ppp->B << std::endl;
+
+    phase_type bestc;
+    size_t bestid;
+    period_type bestd;
+
+    d = (double)m_mind;
+    for(id = 0; id < m_nd; id++, DP__ += m_nc, d *= m_dstep)
+    {
+        pDP = DP__;
+        for(c = -m_nc/2; c < m_nc/2; c++, pDP++)
+            if(pDP->B < pBestNode->B)
             {
-                best_node = node;
+                pBestNode = pDP;
+                bestc = c;
+                bestid = id;
+                bestd = (period_type) d;
             }
-        }
-        period_idx++;
     }
-    best_nodes.at(row_number) = std::make_pair(best_node.c, periods[best_node.d]);
+    best_nodes.at(row_number) = std::make_pair(bestc, bestd);
+    // m_c[v] = bestc;
+    // m_id[v] = bestid;
+    // m_d[v] = bestd;
+    // data_type best_node, node;
 
-    phase_type best_phase; // = best_node.first;
-    period_type best_period; //  = best_node.second;
-    size_t best_period_idx;
 
     while(row_number-- > 0) {
-        best_node = dataset.at(row_number).at(std::make_pair(best_node.c, best_node.d));
-        best_nodes.at(row_number) = std::make_pair(best_node.c, periods[best_node.d]);
+        pDP = pBestNode - n;
 
-        // double x = dataset.at(row_number).at(best_node).minBV;
-        std::cout << "row: " << row_number - 1 << " phase: " << best_node.c << " period:" << best_node.d << std::endl;
+        DP_ -= n;
+
+        pBestNode = DP_ + pDP->d * m_nc + m_nc / 2 + pDP->c;
+
+        bestc = pDP->c;
+        bestid = pDP->d;
+        bestd = periods[bestd];
+
+        best_nodes.at(row_number) = std::make_pair(bestc, periods[bestd]);
     }
-    // delete[] intersection_points;
-    // delete[] parabola_centers_period;
-    // delete[] parabola_centers_period_idx;
     return best_nodes;
 }
 

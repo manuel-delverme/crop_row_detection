@@ -194,7 +194,7 @@ int main(int argc, char** argv){
         std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, Xs);
         std::cout << "Time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 #if !DEBUG
-        plot_template_matching(pIntensityImg, match_results);
+        // plot_template_matching(pIntensityImg, match_results);
 #endif
         plot_template_matching(pIntensityImg, min_energy_results);
 
