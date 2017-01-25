@@ -58,8 +58,18 @@ private:
 
     double cumulative_sum(int v, int start);
     inline const phase_type get_real_phase(phase_type phase, const period_type period_) const {
-        const phase_type half_band = (phase_type) floor(0.5 * period_);
-        const phase_type real_phase = (abs(phase + half_band) % (int) floor(period_)) - half_band;
+        /*
+        uint period = (unsigned int) period_;
+        const unsigned int half_band = period >> 1;
+        int shifted_phase = phase + half_band;
+
+        const int mask = shifted_phase >> sizeof(int) * CHAR_BIT - 1;
+        const uint abs_phase = (unsigned int)(shifted_phase ^ mask) - mask;
+        const phase_type real_phase = (abs_phase  % period) - half_band;
+        return real_phase;
+         */
+        const phase_type half_band = (phase_type) floor(period_)>>1;
+        const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period_)) - half_band;
         return real_phase;
     };
 

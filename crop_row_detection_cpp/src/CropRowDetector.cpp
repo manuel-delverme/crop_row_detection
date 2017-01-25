@@ -237,6 +237,7 @@ CropRowDetector::find_best_parameters(std::vector<std::map<old_tuple_type, doubl
 
     for (size_t row_number = 0; row_number < image_height; row_number++, dataset_row_ptr += row_size) {
         std::cout << row_number << std::endl;
+
         auto row_max = std::max_element(std::begin(energy_map.at(row_number)), std::end(energy_map.at(row_number)),
                                         comparer); //TODO: take it from template_matching
         Dnrm = (energy_type) row_max->second;
