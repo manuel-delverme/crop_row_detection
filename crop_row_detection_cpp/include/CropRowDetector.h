@@ -6,30 +6,17 @@
 #define NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
 
 typedef int phase_type;
-typedef double period_type;
+typedef float period_type;
+typedef unsigned short period_idx_type;
+typedef double energy_type;
 typedef std::pair<phase_type, period_type> old_tuple_type;
 typedef std::pair<phase_type, size_t> tuple_type;
 
 struct data_type{
-    double B;
-    double minBV;
+    energy_type tuple_value;
     phase_type c;
-    int d;
+    period_idx_type d;
 };
-namespace std
-{
-    template<>
-    struct hash<std::pair<phase_type, size_t>> {
-        inline size_t operator()(const std::pair<phase_type, size_t> &p) const {
-            const int m_max_d = 256;
-            size_t h, h2;
-            h = ((uint) (p.first + m_max_d / 2));
-            h2 = (uint) ((uint) p.second) & 0x0000ffff;
-            return h*m_max_d+h2;
-        }
-    };
-}
-
 class CropRowDetector{
     // int width;
 public:
@@ -63,15 +50,20 @@ private:
     double m_period_scale_factor;
 
     const float m_f_low = 1.0;
-    const float m_maxD = 1.5;
+    const energy_type m_maxD = 1.5;
     const float m_lambda_c = 0.5f;
     const float m_lambda_d = 0.2f;
 
     const double m_last_period = m_mind * std::pow(m_dstep, m_nd-1);
 
     double cumulative_sum(int v, int start);
+    inline const phase_type get_real_phase(phase_type phase, const period_type period_) const {
+        const phase_type half_band = (phase_type) floor(0.5 * period_);
+        const phase_type real_phase = (abs(phase + half_band) % (int) floor(period_)) - half_band;
+        return real_phase;
+    };
 
-    size_t period_min(const phase_type phase, std::vector<period_type> periods);
+    int period_min(const phase_type phase, period_type* periods);
 
     data_type *m_dataset_ptr;
 };

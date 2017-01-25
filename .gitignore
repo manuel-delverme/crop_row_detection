@@ -2,3 +2,5 @@ build/
 tags
 all_images/
 playground/
+cmake-build-*/
+.idea/
