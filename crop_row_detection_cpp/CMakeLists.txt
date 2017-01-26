@@ -1,4 +1,4 @@
-project(NEW_crop_row_detection)
+project(crop_row_detection_cpp)
 
 cmake_minimum_required (VERSION 2.8)
 cmake_policy(SET CMP0015 NEW)
@@ -33,22 +33,18 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
     -march=native \
     -fopenmp")
 
-
-# -Og \
-# -pthread \
-# -Ofast \
-# -Werror \
-# -ggdb3 \
-
-find_package(OpenCV REQUIRED)
-INCLUDE_DIRECTORIES("/usr/local/")
+find_package(OpenCV 2 REQUIRED)
 
 include_directories(
         include
 )
-add_executable(crop_row_detection
-        src/crop_row_detection_main.cpp
-        src/ImagePreprocessor.cpp
-        src/CropRowDetector.cpp
-        src/get_real_phase.h)
-target_link_libraries(crop_row_detection ${OpenCV_LIBS})
+add_library(crop_row_detection_cpp_main src/crop_row_detection_main.cpp)
+add_library(crop_row_detection_cpp_preprocessor src/ImagePreprocessor.cpp)
+add_library(crop_row_detection_cpp_detector src/CropRowDetector.cpp)
+
+# add_executable(crop_row_detection
+#         src/crop_row_detection_main.cpp
+#         src/ImagePreprocessor.cpp
+#         src/CropRowDetector.cpp
+#        )
+# target_link_libraries(${OpenCV_LIBS})

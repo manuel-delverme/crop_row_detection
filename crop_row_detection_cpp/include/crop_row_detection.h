@@ -1,9 +1,7 @@
-#include <map>
+#include <CropRowDetector.h>
 
-class CropRowDetector {
-    int a, b;
-    public:
-        // CropRowDetector(std::map<std::string, double>);
-        CropRowDetector(int);
-        void setup();
- };
+namespace crd_cpp {
+    void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<old_tuple_type> &match_results);
+
+    void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<tuple_type> &match_results);
+}
