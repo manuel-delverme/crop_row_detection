@@ -12,7 +12,7 @@ namespace crd_cpp{
             ImagePreprocessor (std::string images_path, cv::Size target_size);
             std::vector<cv::Mat> process();
             std::map<period_type, std::vector<phase_type>> get_Xs(const period_type m_mind, const int n_periods, const double m_dstep);
-
+            // std::map<period_type, std::vector<phase_type>> get_Xs(const period_type m_mind, const size_t n_periods, const double m_dstep) {
         private:
             cv::Size m_size;
             std::string m_images_folder = "";

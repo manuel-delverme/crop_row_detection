@@ -1,28 +1,32 @@
-project(crop_row_detection)
-
 cmake_minimum_required (VERSION 2.8)
-cmake_policy(SET CMP0015 NEW)
+project(crop_row_detection_original)
 
-set(CMAKE_BUILD_TYPE Debug)
+cmake_policy(SET CMP0015 NEW)
+MESSAGE(STATUS "88888888888888888888====================DDDDDDDDDDDDDDDDDDDD")
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
-find_package(OpenCV 2  REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  rospy
-  std_msgs
-  geometry_msgs
-  sensor_msgs
-  tf
-  cv_bridge
-)
-find_package(Eigen3 REQUIRED)
+        crop_row_detection_cpp
+        roscpp
+        rospy
+        std_msgs
+        geometry_msgs
+        sensor_msgs
+        tf
+        cv_bridge
+        )
 catkin_package(INCLUDE_DIRS include)
+include_directories(
+        include
+        ${catkin_INCLUDE_DIRS}
+        ${OpenCV_INCLUDE_DIR}
+)
 
-include_directories(include ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR})
-include_directories(../crop_row_detection_cpp/include)
-
+# include_directories(../crop_row_detection_cpp/include)
 file(GLOB_RECURSE my_project_SRC "src/*.cpp")
+
 
 add_executable(crop_row_detection_node ${my_project_SRC})
 

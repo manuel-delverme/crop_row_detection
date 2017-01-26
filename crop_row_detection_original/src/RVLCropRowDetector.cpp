@@ -483,9 +483,6 @@ if(v==1)
 		std::cout << "row: " << v << " c: " << m_c[v] << " d: " << m_d[v] << " best score: " << m_bestScore[v] << std::endl;
 	}
 
-	exit(1);*/
-
-	/*int aa;
 	std::cin >> aa;*/
 
 	//std::cout << "results after optimization" << std::endl;*/
@@ -540,298 +537,130 @@ if(v==1)
 	//timer.Reset();
 	//timer.Start();
 
-	for(v = 0; v < m_h; v++, DP_ += n)
-	{
-#ifdef RVLCRD_DEBUG
-		if(v == 236)
-			int debug = 0;
-#endif
-
+	for(v = 0; v < m_h; v++, DP_ += n) {
 		Dnrm = m_bestScore[v];
-
-		//cout << Dnrm << endl;
-
-		DP__ = DP_;		// DP__ - ptr. to the first data in a block row
-int asd = 0;
-		for(id = 0; id < m_nd; id++, DP__ += m_nc, asd+=m_nc)
-		{
+		DP__ = DP_;        // DP__ - ptr. to the first data in a block row
+		for (id = 0; id < m_nd; id++, DP__ += m_nc) {
 			crange = crange_[id];
 
-			//OLD crange
-			//pDP = DP__ + m_nc / 2 - crange;
 			pDP = DP__;
-
-			int asd2 = asd;
-
-			//cout << m_maxD << endl;
-			//for(c = -crange; c < crange; c++, pDP++)
-			for(c = -m_nc/2; c < m_nc/2; c++, pDP++, asd2++)
-			{
-				if(Dnrm >= 1.0)
-				{
+			for (c = -m_nc / 2; c < m_nc / 2; c++, pDP++) {
+				if (Dnrm >= 1.0) {
 					pDP->B = 1.0 - pDP->D / Dnrm;
 
-					if(pDP->B > m_maxD)
+					if (pDP->B > m_maxD)
 						pDP->B = m_maxD;
-				}
-				else
+				} else
 					pDP->B = m_maxD;
-				
-				if(v > 0)
-					pDP->B += (pDP - n)->minBV;
-		
-			    /*if(v==0)
-			    cout << asd2 << " " << pDP->B << endl;*/
 
+				if (v > 0)
+					pDP->B += (pDP - n)->minBV;
 			}
 		}
 
-//exit(1);
-
-		if(v < m_h - 1)
-		{
+		if (v < m_h - 1) {
 			DP__ = DP_;
-
-#ifdef RVLCRD_L1
-
-#else
-			maxz = (1.0 + m_lambdac * (double)(m_nc * m_nc)) / (2.0 * m_lambdac);
-int asd=0;
-			for(id = 0; id < m_nd; id++, DP__ += m_nc, asd += m_nc)
-			{
-
-#ifdef RVLCRD_DEBUG
-				if(id == 186)
-					int debug = 0;
-#endif
+			maxz = (1.0 + m_lambdac * (double) (m_nc * m_nc)) / (2.0 * m_lambdac);
+			for (id = 0; id < m_nd; id++, DP__ += m_nc) {
 				crange = crange_[id];
-
-				// felzenszwalb_TC12	RVL
-				// ============================================
-				// k					k
-				// v					v_
-				// z					z
-				// q					c
-				// s					s
-				// f(q)					pDP->B
-				// f(v(k))				DP__[v_[k]+m_nc/2].B
-
 				k = 0;
-				//OLD crange
-				//v_[0] = -crange;
-				v_[0] = -m_nc*0.5;
+				v_[0] = -m_nc * 0.5;
 				z[0] = -maxz;
 				z[1] = maxz;
-
-				//OLD crange
-				//pDP = DP__ + m_nc / 2 - crange + 1;
 				pDP = DP__ + 1;
 
+				for (c = -m_nc / 2 + 1; c < m_nc / 2; c++, pDP++) {
+					while (true) {
+						s = ((pDP->B + m_lambdac * (double) (c * c)) -
+							 (DP__[v_[k] + m_nc / 2].B + m_lambdac * (double) (v_[k] * v_[k]))) /
+							(2.0 * m_lambdac * (double) (c - v_[k]));
 
-
-				//for(c = -crange + 1; c < crange; c++, pDP++)
-				for(c = -m_nc/2 + 1; c < m_nc/2; c++, pDP++)
-				{
-					while(true)
-					{
-						s = ((pDP->B + m_lambdac * (double)(c * c)) - (DP__[v_[k] + m_nc / 2].B + m_lambdac * (double)(v_[k] * v_[k]))) / 
-							(2.0 * m_lambdac * (double)(c - v_[k]));
-
-
-						//std::cout << s << std::endl;
-						/*int aaa;
-						std::cin >> aaa;*/
-
-
-						//debugCounter1++;
-
-						if(s <= z[k])
+						if (s <= z[k])
 							k--;
 						else
 							break;
 					}
-
 					k++;
-
 					v_[k] = c;
 					z[k] = s;
 					z[k + 1] = maxz;
 				}
-
-				
-
 				k = 0;
 
 				pDP = DP__;
-
-				int asd2 = asd;
-
-				for(c = -m_nc / 2; c < m_nc / 2; c++, pDP++, asd2++)
-				{
-					while(z[k + 1] < (double)c)
-					{
-						//debugCounter2++;
-
+				for (c = -m_nc / 2; c < m_nc / 2; c++, pDP++) {
+					while (z[k + 1] < (double) c) {
 						k++;
 					}
 
 					iTmp = (c - v_[k]);
-					pDP->minBV = DP__[v_[k] + m_nc / 2].B + m_lambdac * (double)(iTmp * iTmp);
+					pDP->minBV = DP__[v_[k] + m_nc / 2].B + m_lambdac * (double) (iTmp * iTmp);
 					pDP->c = v_[k];
 					pDP->id = id;
-
-					//cout << v_[k] + m_nc / 2 << " " << DP__[v_[k] + m_nc / 2].B << " " << pDP->minBV << endl;
 				}
+			}    // for(id = 0; id < m_nd; id++)
+			maxz = (1.0 + m_lambdad * (double) (m_nd * m_nd)) / (2.0 * m_lambdad);
+			DP__ = DP_;
 
-				/* ------------------------ FINO A QUA FUNGE ------------------------- */
-
-				
-
-			}	// for(id = 0; id < m_nd; id++)
-//exit(1);
-			maxz = (1.0 + m_lambdad * (double)(m_nd * m_nd)) / (2.0 * m_lambdad);
-
-			DP__ = DP_;	
-
-			int asd3 = 0;		
-
-			for(c = 0; c < m_nc; c++, DP__++, asd3++)
-			{
-#ifdef RVLCRD_DEBUG
-				if(c == m_nc / 2)
-					int debug = 0;
-#endif
+			for (c = 0; c < m_nc; c++, DP__++) {
 				k = 0;
 				v_[0] = 0; //for saving id
-				v__[0] = (double)m_mind; //for saving d
+				v__[0] = (double) m_mind; //for saving d
 				z[0] = -maxz;
 				z[1] = maxz;
 
 				pDP = DP__ + m_nc;
-				
-				//NEW d_development
-				//d = (double)m_mind*m_dstep;
-				d = (double)m_mind;
+				d = (double) m_mind;
 
-				for(id = 1; id < m_nd; id++, pDP += m_nc)
-				{
-					//NEW d_development
+				for (id = 1; id < m_nd; id++, pDP += m_nc) {
 					d *= m_dstep;
-
-					while(true)
-					{
-
-						s = ((pDP->minBV + m_lambdad * (double)(d * d)) - (DP__[m_nc * v_[k]].minBV + m_lambdad * (double)(v__[k] * v__[k]))) / 
-							(2.0 * m_lambdad * (double)(d - v__[k]));
-
-
-						cout << z[k] << " " << k  << " " << DP__[m_nc * v_[k]].minBV << " " << id << endl;
-
-						if(s <= z[k])
+					while (true) {
+						s = ((pDP->minBV + m_lambdad * (double) (d * d)) -
+							 (DP__[m_nc * v_[k]].minBV + m_lambdad * (double) (v__[k] * v__[k]))) /
+							(2.0 * m_lambdad * (double) (d - v__[k]));
+						if (s <= z[k])
 							k--;
 						else
 							break;
 					}
-
-
 					k++;
-
-					//NEW d_development
 					v_[k] = id;
 					v__[k] = d;
-
 					z[k] = s;
-					z[k + 1] = maxz;					
+					z[k + 1] = maxz;
 				}
 
 				k = 0;
 
 				pDP = DP__;
+				d = (double) m_mind;
 
-				//NEW d_development
-				d = (double)m_mind;
-
-				for(id = 0; id < m_nd; id++, pDP += m_nc)
-				{
-
-					while(z[k + 1] < d)	{
+				for (id = 0; id < m_nd; id++, pDP += m_nc) {
+					while (z[k + 1] < d) {
 						k++;
 					}
-
-					//iTmp = (id - v_[k]);
 					iTmp = (d - v__[k]);
-
-					pDP->minBV = DP__[m_nc * v_[k]].minBV + (m_lambdad * (double)(iTmp * iTmp));
+					pDP->minBV = DP__[m_nc * v_[k]].minBV + (m_lambdad * (double) (iTmp * iTmp));
 					pDP->c = DP__[m_nc * v_[k]].c;
 					pDP->id = v_[k];
-					/*if(v<10)
-						std::cout << v << " "<< pDP->minBV << " " << pDP->c << " " << pDP->id << std::endl;*/
-
-					//NEW d_development
 					d *= m_dstep;
-
-					/*if(v==0)
-						cout << pDP->minBV << " " << pDP->c << endl;*/
-
 				}
 
-			}	//	for(c = 0; c < m_nc; c++)
-			exit(1);
-#endif
-
-		}	// if(v < m_h - 1)
-
-/*#ifdef RVLCRD_DEBUG
-		pDP = DP_;
-
-		for(id = 0; id < m_nd; id++)
-			for(c = 0; c < m_nc; c++, pDP++)
-				if(pDP->minBV < 0)
-					int debug = 0;
-#endif*/
-	}	// for(v = 0; v < m_h - 1; v++, DP_ += n)
-
-#ifndef RVLCRD_L1
-	/*elete[] v_;
-	delete[] z;*/
-#endif
-
-
-
+			}    //	for(c = 0; c < m_nc; c++)
+		}    // if(v < m_h - 1)
+	}
 	DP_ = m_DPData + (m_h - 1) * n;
-
 	DP__ = DP_;
-
 	v = m_h - 1;
 
-	/*DP__ = m_DPData + 100*n;
-	for(unsigned int i=0; i < n; i++)
-		cout << DP__->minBV << endl; */
-
-	//OLD crange
-	//RVLCRD_DPDATA *pBestNode = DP__ + m_nc / 2 - crange_[0];
 	RVLCRD_DPDATA *pBestNode = DP__;
-
-
 	RVLCRD_DPDATA *ppp = m_DPData;
-	for(unsigned int iter = 0; iter < m_nc*m_nd; iter++, ppp++)
-		cout << iter << " " << ppp->B << endl;
-
-	//cout << pBestNode->B << endl;
-	exit(1);
-
-	//for saving best d
 	d = (double)m_mind;
 
 	for(id = 0; id < m_nd; id++, DP__ += m_nc, d *= m_dstep)
 	{
 		crange = crange_[id];
-
-		//OLD crange
-		//pDP = DP__ + m_nc / 2 - crange;
 		pDP = DP__;
-
-		//for(c = -crange; c < crange; c++, pDP++)
 		for(c = -m_nc/2; c < m_nc/2; c++, pDP++)
 			if(pDP->B < pBestNode->B)
 			{
@@ -846,19 +675,7 @@ int asd=0;
 	m_id[v] = bestid;
 	m_d[v] = bestd;
 
-/*#ifdef RVLCRD_DEBUG
-	char name[40];
-	sprintf(name, "Image_ExG_%d.txt", imNum);
-	FILE *f = fopen(name, "w");
-	//fprintf(f, "v\tpDP->D\t\tpDP->B\t\tpDP->minBV\tpDP->c\tpDP->id\n");
-	//fprintf(f, "---------------------------------------------------------------------------------\n");
-#endif*/
-
-	m_visibleStart = 0;
-	m_visibleStop = 0;
-
-	for(v = m_h - 2; v >= 0; v--)
-	{
+	for(v = m_h - 2; v >= 0; v--) {
 		pDP = pBestNode - n;
 
 		DP_ -= n;
@@ -868,50 +685,16 @@ int asd=0;
 		m_c[v] = pDP->c;
 		m_id[v] = pDP->id;
 		m_d[v] = (double)m_mind * pow(m_dstep, (double)(m_id[v]));
-
-		/*if(abs(m_idFilter[v] - m_id[v]) < 3)
-		//if(pDP->D == m_bestScore[v])
-		{
-			//m_visibleStart = v;
-			if(m_visibleStop == 0)
-			{
-				m_visibleStop = v;
-				m_visibleStart = v;
-			}
-			else
-			{
-				m_visibleStart = v;
-			}
-		}*/
-
-		//std::cout << "row: " << v << " c: " << m_c[v] << " d: " << m_d[v] << " best score: " << m_bestScore[v] <<std::endl;
-
-exit(1);
-
-#ifdef RVLCRD_DEBUG
-		fprintf(f, "%d\t%f\t%f\t%f\t%d\t%d\t%f\n", v,pDP->D,pDP->B,pDP->minBV,pDP->c,pDP->id,m_bestScore[v]);
-#endif
 	}
-
-	/*for(v = m_h - 2; v >= 0; v--)
-		std::cout << v << " " << m_c[v] << " " << m_d[v] << std::endl;*/
-
-	/*int aaa; 
-	std::cin >> aaa;*/
-
-#ifdef RVLCRD_DEBUG
-	fclose(f);
-#endif
 
 	//end Optimization timer
 	end = clock();
 	m_optimizationTime = ((double)end - (double)start) / (double)CLOCKS_PER_SEC;
-
-	//timer.End();
-	//m_optimizationTime = timer.GetEllapsedMS();
+    std::cout << "optimization time: " << m_optimizationTime;
 
 	//m_totalTime = m_vegetationImageTime + m_templateMatchingTime + m_optimizationTime;
 	m_totalTime = ((double)end - (double)startTotal) / (double)CLOCKS_PER_SEC;
+	std::cout << "total time: " << m_optimizationTime;
 
 	delete[] crange_;
 }

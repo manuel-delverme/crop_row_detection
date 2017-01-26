@@ -1,8 +1,10 @@
+cmake_minimum_required (VERSION 2.8)
 project(crop_row_detection_cpp)
 
-cmake_minimum_required (VERSION 2.8)
 cmake_policy(SET CMP0015 NEW)
+MESSAGE(STATUS "77777777777777777777====================DDDDDDDDDDDDDDDDDDDD")
 
+set(CMAKE_BUILD_TYPE "Release")
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
    set(CMAKE_BUILD_TYPE "Release")
 endif()
@@ -28,23 +30,19 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
     -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
     -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
     -Ofast \
-    -O3 \
+    -O2 \
     -pipe \
-    -march=native \
-    -fopenmp")
+    -march=native")
+# -fopenmp"
 
-find_package(OpenCV 2 REQUIRED)
-
+find_package(OpenCV REQUIRED)
+catkin_package(INCLUDE_DIRS include)
 include_directories(
+        src
         include
-)
-add_library(crop_row_detection_cpp_main src/crop_row_detection_main.cpp)
-add_library(crop_row_detection_cpp_preprocessor src/ImagePreprocessor.cpp)
-add_library(crop_row_detection_cpp_detector src/CropRowDetector.cpp)
+        ${catkin_INCLUDE_DIRS}
+        ${OpenCV_INCLUDE_DIR}
+        )
 
-# add_executable(crop_row_detection
-#         src/crop_row_detection_main.cpp
-#         src/ImagePreprocessor.cpp
-#         src/CropRowDetector.cpp
-#        )
-# target_link_libraries(${OpenCV_LIBS})
+add_library(crop_row_detection_cpp_detector src/crop_row_detection_main.cpp src/CropRowDetector.cpp src/ImagePreprocessor.cpp)
+target_link_libraries(crop_row_detection_cpp_detector ${OpenCV_LIBS} ${catkin_LIBRARIES} )

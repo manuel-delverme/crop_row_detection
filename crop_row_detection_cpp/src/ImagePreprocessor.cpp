@@ -55,8 +55,8 @@ namespace crd_cpp {
         return intensity;
     }
 
-    std::map<period_type, std::vector<phase_type>>
-    get_Xs(const period_type m_mind, const size_t n_periods, const double m_dstep) {
+    std::map<period_type, std::vector<phase_type> >
+    ImagePreprocessor::get_Xs(const period_type m_mind, const int n_periods, const double m_dstep) {
         std::map<period_type, std::vector<phase_type>> Xs;
         std::vector<phase_type> phases;
         period_type period = m_mind;

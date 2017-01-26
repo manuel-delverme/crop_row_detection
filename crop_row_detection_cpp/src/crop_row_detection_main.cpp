@@ -59,7 +59,7 @@ namespace crd_cpp {
             phase_type phase = x.first;
             period_type period = x.second;
             period_type center_of_image = (period_type) std::round(image_width / 2);
-            std::cout << image_row_num << " " << phase << "," << period << std::endl;
+            // std::cout << image_row_num << " " << phase << "," << period << std::endl;
             period_type column = center_of_image + (period_type) phase;
             while (column < image_width) {
                 cv::Vec3b &pPixel = temp_image.at<cv::Vec3b>((int) image_row_num, (int) column);

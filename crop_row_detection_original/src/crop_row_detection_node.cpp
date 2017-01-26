@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
 
     ros::Subscriber img_sub = nh.subscribe<sensor_msgs::Image>("/camera/image_raw", 1, image_cb);
 
-    string cfg_filename = "/home/temistocle/neo_ws/src/crop_row_detection/cfg/params.cfg";
+    string cfg_filename = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_original/cfg/params.cfg";
 
     cfg_filename = nh.param("cfg_filename", cfg_filename);
 
@@ -94,8 +94,8 @@ int main(int argc, char **argv) {
     }
     initDetector(cfg_filename);
 
-
-    std::string image_path = "/home/temistocle/Scrivania/crop_row_detector_cpp/Images/download.jpg";
+    string image_path = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/download.jpg";
+    string image_path_cpp = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/";
     cv::Mat im = imread(image_path);
     resize(im, im, Size(w, h));
 
@@ -106,19 +106,25 @@ int main(int argc, char **argv) {
     ExGImage = cvCreateImage(cvSize(w, h), 8, 1);
 
     //---------- CROP ROW DETECTION CPP SETUP ----------
+    cout << "CPP setup" << endl;
     std::map<std::string, double> settings; // setup();
     settings["a0"] = 1.28;
     settings["b0"] = 4.48;
     settings["width"] = 400;
     settings["height"] = 300;
     cv::Size image_size = cv::Size((uint) settings["width"], (uint) settings["height"]);
-    crd_cpp::ImagePreprocessor preprocessor(image_path, image_size);
+    crd_cpp::ImagePreprocessor preprocessor(image_path_cpp, image_size);
     crd_cpp::CropRowDetector row_detector = crd_cpp::CropRowDetector();
+
+    cout << "getting Xs" << endl;
     auto Xs = preprocessor.get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
 
     std::vector<std::map<crd_cpp::old_tuple_type, double>> energy_map((size_t) image_size.height);
+    cout << "preprocesssing" << endl;
     std::vector<cv::Mat> images = preprocessor.process();
     cv::Mat &pIntensityImg = images.at(0);
+
+    cout << "load" << endl;
     row_detector.load(pIntensityImg);
 
     std::clock_t start;
@@ -135,13 +141,9 @@ int main(int argc, char **argv) {
     auto min_energy_results = row_detector.find_best_parameters(energy_map);
     std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-    std::cout << "START" << std::endl;
-    start = std::clock();
-    CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width,
-                 pInputImage->height);
-    std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+    CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width, pInputImage->height);
 
-    // row_detector.teardown();
+    row_detector.teardown();
 
     // plot_template_matching(pIntensityImg, min_energy_results);
 
@@ -151,7 +153,10 @@ int main(int argc, char **argv) {
 
     //Apply crop row detection method
     crd_cpp::CropRowDetector crd_cpp = crd_cpp::CropRowDetector();
+    std::cout << "START" << std::endl;
+    start = std::clock();
     CRD.Apply((unsigned char *) ExGImage->imageData, w, 0);
+    std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
 //   cvCvtColor(pInputImage, pDisplay, CV_GRAY2RGB);
     cvCopy(pInputImage, pDisplay);
