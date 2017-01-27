@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
 
     ros::Subscriber img_sub = nh.subscribe<sensor_msgs::Image>("/camera/image_raw", 1, image_cb);
 
-    string cfg_filename = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_original/cfg/params.cfg";
+    string cfg_filename = "/home/awok/catkin_ws/src/crop_row_detection/crop_row_detection_original/cfg/params.cfg";
 
     cfg_filename = nh.param("cfg_filename", cfg_filename);
 
@@ -94,8 +94,8 @@ int main(int argc, char **argv) {
     }
     initDetector(cfg_filename);
 
-    string image_path = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/download.jpg";
-    string image_path_cpp = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/";
+    string image_path = "/home/awok/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/download.jpg";
+    string image_path_cpp = "/home/awok/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/";
     cv::Mat im = imread(image_path);
     resize(im, im, Size(w, h));
 
@@ -116,62 +116,57 @@ int main(int argc, char **argv) {
     crd_cpp::ImagePreprocessor preprocessor(image_path_cpp, image_size);
     crd_cpp::CropRowDetector row_detector = crd_cpp::CropRowDetector();
 
-    cout << "getting Xs" << endl;
     auto Xs = preprocessor.get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
 
-    std::vector<std::map<crd_cpp::old_tuple_type, double>> energy_map((size_t) image_size.height);
-    cout << "preprocesssing" << endl;
+    std::vector<std::vector<std::vector<crd_cpp::energy_type>>> energy_map;
     std::vector<cv::Mat> images = preprocessor.process();
     cv::Mat &pIntensityImg = images.at(0);
 
-    cout << "load" << endl;
     row_detector.load(pIntensityImg);
 
     std::clock_t start;
 
     std::cout << "START" << std::endl;
     start = std::clock();
-    auto match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs, settings["a0"], settings["b0"],
+    std::cout << "ping" << std::endl;
+    auto max_by_row = row_detector.template_matching(energy_map, pIntensityImg, Xs, settings["a0"], settings["b0"],
                                                         (size_t) settings["width"]);
+    std::cout << "ping" << std::endl;
     std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms"
               << std::endl;
 
     std::cout << "START" << std::endl;
     start = std::clock();
-    auto min_energy_results = row_detector.find_best_parameters(energy_map);
+    auto min_energy_results = row_detector.find_best_parameters(energy_map, max_by_row);
     std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
     CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width, pInputImage->height);
 
     row_detector.teardown();
 
-    // plot_template_matching(pIntensityImg, min_energy_results);
+    if(argc > 1)
+        crd_cpp::plot_template_matching(pIntensityImg, min_energy_results);
 
-    cvShowImage("Crop Rows BGR", ExGImage);
-    cvSaveImage("ExG.png", ExGImage);
-    //cv::waitKey(0);
+    // cvShowImage("Crop Rows BGR", ExGImage);
+    // cvSaveImage("ExG.png", ExGImage);
 
     //Apply crop row detection method
-    crd_cpp::CropRowDetector crd_cpp = crd_cpp::CropRowDetector();
     std::cout << "START" << std::endl;
     start = std::clock();
     CRD.Apply((unsigned char *) ExGImage->imageData, w, 0);
     std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-//   cvCvtColor(pInputImage, pDisplay, CV_GRAY2RGB);
-    cvCopy(pInputImage, pDisplay);
+    // cvCopy(pInputImage, pDisplay);
 
-    CRD.Display((unsigned char *) (pDisplay->imageData), w);
-    cvShowImage("Crop Rows BGR", pDisplay);
+    // CRD.Display((unsigned char *) (pDisplay->imageData), w);
+    // cvShowImage("Crop Rows BGR", pDisplay);
 
-    cvWaitKey(0);
-
-
-    while (ros::ok())
-        ros::spinOnce();
+    // cvWaitKey(0);
 
 
-    ros::spin();
+    // while (ros::ok())
+    //     ros::spinOnce();
+    // ros::spin();
 
     return 0;
 }

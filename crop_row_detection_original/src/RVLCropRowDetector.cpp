@@ -11,7 +11,7 @@ using namespace std;
 CRVLCropRowDetector::CRVLCropRowDetector(void)
 {
 	m_mind = 8;
-	m_ndOctaves = 3;
+	m_ndOctaves = 5;
 	m_ndSamplesPerOctave = 70;
 	m_a0 = 1;
 	m_b0 = 3;
@@ -124,6 +124,7 @@ void CRVLCropRowDetector::Init(int h)
 void CRVLCropRowDetector::Apply(unsigned char * I,
 								int w, int imNum)
 {
+    startTotal = clock();
 	double fa0 = (double)m_a0;
 	double fb0 = (double)m_b0;
 	double fd0 = (double)m_d0;
@@ -206,30 +207,29 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 
 
 
-		for(id = 0; id < m_nd; id++, d *= m_dstep, DP__ += m_nc)
-		{
+		for(id = 0; id < m_nd; id++, d *= m_dstep, DP__ += m_nc) {
 
 #ifdef RVLCRD_DEBUG
-			if(d > 10.0 * debug)
-				debug++;
+            if(d > 10.0 * debug)
+                debug++;
 #endif
-			crange = (int)floor(0.5 * d);
+			crange = (int) floor(0.5 * d);
 
 			crange_[id] = crange;
 
 			scale = d / fd0;
 			fTmp = floor(scale * fa0 + 0.5);
-			a = (int)fTmp;
+			a = (int) fTmp;
 			halfa = 0.5 * fTmp;
 			fTmp = floor(scale * fb0 + 0.5);
-			b = (int)fTmp;
+			b = (int) fTmp;
 			halfb = 0.5 * fTmp;
 			halfd = 0.5 * d;
-			fub =  halfd - halfb;
+			fub = halfd - halfb;
 
 			pDP = DP__ + m_nc / 2 - crange;
 
-			int asd = m_nc/2-crange;
+			int asd = m_nc / 2 - crange;
 
 			//FOR score IMAGE (d x c)
 			//if(v == 30)
@@ -241,20 +241,18 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 
 			//cout << d << endl;
 
-			for(c = -crange; c < crange; c++, pDP++, asd++)
-			{
+			for (c = -crange; c < crange; c++, pDP++, asd++) {
 
 //cout << a << " " << b << " " << fa0 << " " << fb0 << endl;
 				//cout << c << endl;
 
 
 
-				kStart = (int)floor((-(double)(w / 2 + c) + halfa) / d);
-				kEnd = (int)floor(((double)(w / 2 - c) + halfa) / d);
+				kStart = (int) floor((-(double) (w / 2 + c) + halfa) / d);
+				kEnd = (int) floor(((double) (w / 2 - c) + halfa) / d);
 
 
-
-				fu = (double)c + (double)kStart * d + halfw;
+				fu = (double) c + (double) kStart * d + halfw;
 /*if(v==0)
 				cout << fu << " " << halfa << " " << fub << endl;*/
 
@@ -266,42 +264,36 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 				u2 = DOUBLE2INT(fu + fub);
 
 				u3 = u2 + b - 1;
-    /*if(v==0)
-    std::cout << halfa << " " << u0 << " " << u1 << " " << u2 << " " << u3 << std::endl;*/
+				/*if(v==0)
+                std::cout << halfa << " " << u0 << " " << u1 << " " << u2 << " " << u3 << std::endl;*/
 
-				if(u1 >= 0)
-				{
+				if (u1 >= 0) {
 					Sa = II[u1];
 					/*if(v==6)
 						cout << II[u1] << endl;*/
 					na = u1;
 
 					//debugCounter++;
-				}
-				else
-				{
+				} else {
 					Sa = 0;
 					na = 0;
 				}
 
 
-				if(u2 < 0)
-					u2 = 0;				
+				if (u2 < 0)
+					u2 = 0;
 
-				if(u3 >= 0)
-				{
-					if(u2>0)
-						Sb = (II[u3] - II[u2-1]);
-					else if(u2<=0)
+				if (u3 >= 0) {
+					if (u2 > 0)
+						Sb = (II[u3] - II[u2 - 1]);
+					else if (u2 <= 0)
 						Sb = (II[u3] - II[u2]);
 					/*if(v==0)
 					cout << "s "<< II[u3] << " " << -II[u2 ] << " " << u3 << " " << u2-1 << endl;*/
 					nb = (u3 - u2 + 1);
 
 					//debugCounter++;
-				}
-				else
-				{
+				} else {
 					Sb = 0;
 					nb = 0;
 				}
@@ -321,8 +313,7 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 			    int aaa;
 			    std::cin >> aaa;*/
 
-				for(k = kStart + 1; k < kEnd; k++, fu += d)
-				{
+				for (k = kStart + 1; k < kEnd; k++, fu += d) {
 
 					u0 = cvFloor(fu - halfa);
 
@@ -357,14 +348,14 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 
 				u1 = u0 + a - 1;
 
-				if(u1 >= w)
+				if (u1 >= w)
 					//cout << "ah, ma tu guarda il merda" <<  endl;
 					u1 = w - 1;
 
 				//cout << "u1:" << u1 <<  endl;
 
-					/*if(v==6)
-					cout << II[u1] << " " << - II[u0 - 1] << endl;*/
+				/*if(v==6)
+                cout << II[u1] << " " << - II[u0 - 1] << endl;*/
 				Sa += (II[u1] - II[u0 - 1]);
 				na += (u1 - u0 + 1);
 
@@ -372,12 +363,11 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 
 				u2 = DOUBLE2INT(fu + fub);
 				//cout << "u2:" << u2 <<  endl;
-				if(u2 < w)
-				{
+				if (u2 < w) {
 					u3 = u2 + b - 1;
 					//cout << "u3:" << u3 <<  endl;
 
-					if(u3 >= w)
+					if (u3 >= w)
 						//cout << "una merdaviglia" <<  endl;
 						u3 = w - 1;
 
@@ -395,10 +385,10 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 /*if(v==0)
 	cout << nb << " " << Sa << " " << na << " " << Sb << endl;*/
 
-				score = (double)(nb * Sa - na * Sb) / (double)(na * nb);		// new score computation
+				score = (double) (nb * Sa - na * Sb) / (double) (na * nb);        // new score computation
 
-					/*int aa;
-					std::cin >> aa;*/
+				/*int aa;
+                std::cin >> aa;*/
 
 				/*if(v <=10)
 					std::cout << "row: " << v << " score: " << score << " phase: " << d << " period: " << c << std::endl;*/
@@ -418,13 +408,12 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 				//END IMAGE
 
 				//copy D value for c values in range <-m_nc/2, m_nc/2>
-				crange2 = 2*crange;
+				crange2 = 2 * crange;
 				pDP_ = pDP + crange2; //pDP_ pointer for copying D value in c range <-m_nc/2, m_nc/2>
-				int asd2 = asd+crange2;
-				c_position = m_nc*0.5 + c + crange2;
+				int asd2 = asd + crange2;
+				c_position = m_nc * 0.5 + c + crange2;
 
-				while(c_position <= m_nc)
-				{
+				while (c_position <= m_nc) {
 					pDP_->D = score;
 
 					pDP_ += crange2;
@@ -434,11 +423,10 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 				}
 
 				pDP_ = pDP - crange2;
-				asd2 = asd-crange2;
-				c_position = m_nc*0.5 + c - crange2;
+				asd2 = asd - crange2;
+				c_position = m_nc * 0.5 + c - crange2;
 
-				while(c_position >= 0)
-				{
+				while (c_position >= 0) {
 					pDP_->D = score;
 
 					pDP_ -= crange2;
@@ -446,25 +434,16 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 					c_position -= crange2;
 				}
 
-				
 
-				if(score > bestScore)
-				{
+				if (score > bestScore) {
 					bestScore = score;
 					bestc = c;
 					bestid = id;
 					bestd = d;
 				}
 
-			}	// for(c = -crange; c < crange; c++)
-				/*int aaa;
-	std::cin >> aaa;*/
-		}//exit(1);	// for(id = 0; id < m_nd; id++, d *= m_dstep)
-		/*int aaa;
-if(v==1)
-
-	std::cin >> aaa;*/
-
+			}    // for(c = -crange; c < crange; c++)
+		}
 		m_c[v] = bestc;
 		m_id[v] = bestid;
 		m_d[v] = bestd;
@@ -506,14 +485,9 @@ if(v==1)
 	// m_DPData is a 3D data structure. It has h blocks, each block having m_nd rows and m_nc columns.
 	// Each block corresponds to an image row.
 
+    start = clock();
 	DP_ = m_DPData;	// DP_ - ptr. to the first data in a block
 
-#ifdef RVLCRD_L1
-	/*std::cout << "RVLCRD_L1" << std::endl;
-	double BV;
-	RVLCRD_DPDATA *pDPPrev;*/
-#else
-	std::cout << "~RVLCRD_L1" << std::endl;
 	int iTmp = RVLMAX(m_nc, m_nd) + 1;
 
 	int *v_ = new int[iTmp];
@@ -528,12 +502,10 @@ if(v==1)
 
 	double maxz;
 	double s;
-#endif
 
 	double Dnrm;
 
 	//start Optimization timer
-	start = clock();
 	//timer.Reset();
 	//timer.Start();
 
@@ -690,11 +662,11 @@ if(v==1)
 	//end Optimization timer
 	end = clock();
 	m_optimizationTime = ((double)end - (double)start) / (double)CLOCKS_PER_SEC;
-    std::cout << "optimization time: " << m_optimizationTime;
+    std::cout << "optimization time: " << m_optimizationTime << std::endl;
 
 	//m_totalTime = m_vegetationImageTime + m_templateMatchingTime + m_optimizationTime;
 	m_totalTime = ((double)end - (double)startTotal) / (double)CLOCKS_PER_SEC;
-	std::cout << "total time: " << m_optimizationTime;
+	std::cout << "total time: " << m_totalTime << std::endl;
 
 	delete[] crange_;
 }
@@ -744,7 +716,6 @@ void CRVLCropRowDetector::ExGImage(unsigned char * I, unsigned char * dst, int w
 	//start Vegetation Image timer
 	double start, end;
 	startTotal = clock();
-	start = clock();
 
 	//CPUTimer timer = new CPUTimer();
 	//timer.Reset();

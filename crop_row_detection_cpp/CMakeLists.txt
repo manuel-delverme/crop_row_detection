@@ -23,23 +23,35 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} \
     -fopenmp")
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
-    -Wconversion \
-    -std=c++14 -Wnon-virtual-dtor -pedantic -Wall \
-    -Wno-missing-braces -Wextra -Wno-missing-field-initializers -Wformat=2 \
-    -Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith \
-    -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
-    -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
+    -std=c++14 \
     -Ofast \
-    -O2 \
+    -O3 \
     -pipe \
     -march=native")
+
 # -fopenmp"
+# -Wconversion \
+# -Wnon-virtual-dtor -pedantic -Wall \
+# -Wno-missing-braces -Wextra -Wno-missing-field-initializers -Wformat=2 \
+# -Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith \
+# -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
+# -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
 
 find_package(OpenCV REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+        crop_row_detection_cpp
+        roscpp
+        rospy
+        std_msgs
+        geometry_msgs
+        sensor_msgs
+        tf
+        cv_bridge
+        )
 catkin_package(INCLUDE_DIRS include)
 include_directories(
         src
-        include
+        include/
         ${catkin_INCLUDE_DIRS}
         ${OpenCV_INCLUDE_DIR}
         )

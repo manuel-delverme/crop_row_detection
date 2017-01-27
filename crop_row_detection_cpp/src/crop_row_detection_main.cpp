@@ -78,67 +78,6 @@ namespace crd_cpp {
         display_img(temp_image);
     }
 
-    std::vector<std::map<old_tuple_type, double>>
-    load_match_results_from_csv(std::map<period_type, std::vector<phase_type>> &Xs) {
-        std::vector<std::map<old_tuple_type, double>> energy_map;
-        std::ifstream csv_stream("../energy_by_row.csv");
-        std::string row;
-
-        // drop header
-        std::getline(csv_stream, row);
-
-        int row_number = -1;
-        int old_row_number = -1;
-        period_type old_period = -1;
-        double score;
-        phase_type phase;
-        period_type period;
-        old_tuple_type x;
-        std::vector<phase_type> phases;
-        bool save_Xs = true;
-
-        while (std::getline(csv_stream, row)) {
-            std::stringstream ss(row);
-
-            ss >> row_number;
-            ss.ignore();
-            ss >> score;
-            ss.ignore();
-            ss >> period;
-            ss.ignore();
-            ss >> phase;
-
-            if (old_period != period) { // this is a new period
-                if (old_period != -1 && save_Xs) { // first time there is nothing to add
-                    Xs.insert(std::make_pair(old_period, phases)); // save the old period/phase
-                }
-                old_period = period;
-                phases.clear();
-            }
-
-            if (old_row_number != row_number) { // row changed
-                if (phases.size() > 0 && save_Xs) { // this happens if there is only one period
-                    Xs.insert(std::make_pair(old_period, phases));
-                }
-                if (old_row_number != -1) {
-                    save_Xs = false;
-                }
-                old_row_number = row_number;
-                energy_map.push_back(std::map<old_tuple_type, double>()); // add a new row to the structure
-                phases.clear(); // just in case two rows have the same phase
-            }
-
-            x = std::make_pair(phase, period);
-            phases.push_back(phase);
-            energy_map.at((size_t) row_number)[x] = score;
-        }
-        if (save_Xs) {
-            // add the last row
-            Xs.insert(std::make_pair(old_period, phases)); // save the old period/phase
-        }
-        return energy_map;
-    }
-
     int main_old(int argc, char **argv) {
         if (argc != 2) {
             return -1;
@@ -161,30 +100,24 @@ namespace crd_cpp {
         Xs = preprocessor.get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
 #endif
 
-        std::vector<std::map<old_tuple_type, double>> energy_map((size_t) image_size.height);
+        std::vector<std::vector<std::vector<energy_type>>> energy_map;
+
+        // std::vector<std::map<old_tuple_type, double>> energy_map((size_t) image_size.height);
         std::vector<cv::Mat> images = preprocessor.process();
 
         for (cv::Mat &pIntensityImg : images) {
 
-#if DEBUG
-            energy_map = load_match_results_from_csv(Xs);
-#else
             row_detector.load(pIntensityImg);
-            std::vector<old_tuple_type> match_results = row_detector.template_matching(energy_map, pIntensityImg, Xs,
+            std::vector<energy_type> max_by_row = row_detector.template_matching(energy_map, pIntensityImg, Xs,
                                                                                        settings["a0"], settings["b0"],
                                                                                        (size_t) settings["width"]);
-#endif
-            std::clock_t start = std::clock();
-            std::cout << "START" << std::endl;
-            std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map);
-            std::cout << "Time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
-#if !DEBUG
-            // plot_template_matching(pIntensityImg, match_results);
-#endif
+            std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, max_by_row);
+
             plot_template_matching(pIntensityImg, min_energy_results);
 
         }
         row_detector.teardown();
+
         std::cout << "done" << std::endl;
         return 0;
     }
