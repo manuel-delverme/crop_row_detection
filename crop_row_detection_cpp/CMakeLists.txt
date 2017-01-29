@@ -16,7 +16,9 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} \
     -Wswitch-default -Wswitch-enum -Wcast-align -Wpointer-arith \
     -Wstrict-overflow=5 -Winline -Wundef -Wcast-qual -Wshadow -Wunreachable-code \
     -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
+    -Wno-ignored-qualifiers \
     -g \
+    -ggdb3 \
     -O0 \
     -pipe \
     -march=native \

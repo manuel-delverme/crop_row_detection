@@ -55,25 +55,6 @@ namespace crd_cpp {
         return intensity;
     }
 
-    std::map<period_type, std::vector<phase_type> >
-    ImagePreprocessor::get_Xs(const period_type m_mind, const int n_periods, const double m_dstep) {
-        std::map<period_type, std::vector<phase_type>> Xs;
-        std::vector<phase_type> phases;
-        period_type period = m_mind;
-        for (size_t period_idx = 0; period_idx < n_periods; period_idx++, period *= m_dstep) {
-            phases.clear();
-            // period = std::trunc(period * 100000) / 100000;
-            int half_band = (int) round(0.5 * period);
-
-            for (int phase = -half_band; phase < half_band; phase++) {
-                phases.push_back(phase);
-            }
-            assert(phases.size() % 2 == 0);
-            Xs[period] = phases;
-        }
-        return Xs;
-    }
-
     std::vector<cv::Mat> ImagePreprocessor::process() {
         std::vector<cv::Mat> images;
         cv::String path(m_images_folder + "*.jpg");

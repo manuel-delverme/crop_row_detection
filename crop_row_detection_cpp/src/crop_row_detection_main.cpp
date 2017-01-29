@@ -95,11 +95,6 @@ namespace crd_cpp {
         ImagePreprocessor preprocessor(argv[1], image_size);
 
         CropRowDetector row_detector = CropRowDetector();
-        std::map<period_type, std::vector<phase_type>> Xs;
-#if !DEBUG
-        Xs = preprocessor.get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
-#endif
-
         std::vector<std::vector<std::vector<energy_type>>> energy_map;
 
         // std::vector<std::map<old_tuple_type, double>> energy_map((size_t) image_size.height);
@@ -108,7 +103,7 @@ namespace crd_cpp {
         for (cv::Mat &pIntensityImg : images) {
 
             row_detector.load(pIntensityImg);
-            std::vector<energy_type> max_by_row = row_detector.template_matching(energy_map, pIntensityImg, Xs,
+            std::vector<energy_type> max_by_row = row_detector.template_matching(energy_map, pIntensityImg,
                                                                                        settings["a0"], settings["b0"],
                                                                                        (size_t) settings["width"]);
             std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, max_by_row);

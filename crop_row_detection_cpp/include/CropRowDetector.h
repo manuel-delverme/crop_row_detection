@@ -28,8 +28,13 @@ namespace crd_cpp {
 
         void teardown();
 
-        double CrossCorrelation(int row_number, old_tuple_type template_var_param, double positive_pulse_width,
-                                double negative_pulse_width, size_t image_width);
+        inline double CrossCorrelation(
+                const uint row_number,
+                phase_type phase, period_type period,
+                const double positive_pulse_width,
+                const double negative_pulse_width,
+                const int image_width
+        );
 
         std::vector<old_tuple_type> find_best_parameters(
                 const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
@@ -40,7 +45,6 @@ namespace crd_cpp {
         template_matching(
                 std::vector<std::vector<std::vector<energy_type>>> &energy_map,
                 const cv::Mat &Intensity,
-                const std::map<period_type, std::vector<phase_type>> &Xs,
                 const double positive_pulse_width,
                 const double negative_pulse_width,
                 const size_t window_width
@@ -50,8 +54,8 @@ namespace crd_cpp {
         const int m_ndOctaves = 5;
         const int m_ndSamplesPerOctave = 70;
         const double m_dstep = std::pow(2.0, 1.0 / (double) m_ndSamplesPerOctave);
-        const int m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
-        const int m_nc = (int) floor((double) m_mind * pow(m_dstep, m_nd)) + 1;
+        const uint m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
+        const uint m_nc = (int) floor((double) m_mind * pow(m_dstep, m_nd)) + 1;
         size_t m_image_height;
         const uint m_row_size = m_nc * m_nd;
 
@@ -70,32 +74,34 @@ namespace crd_cpp {
 
         const float m_f_low = 1.0;
         const energy_type m_maxD = 1.5;
-        const float m_lambda_c = 0.5f;
-        const float m_lambda_d = 0.2f;
-        const energy_type m_maxz = (const energy_type) ((1.0 + (m_lambda_c + m_lambda_d) * m_nd * m_nd) /
-                                                        (m_lambda_c * m_lambda_d));
-        const phase_type m_first_phase = (const phase_type) (-m_nc / 2);
+        const double m_lambda_c = 0.5;
+        const double m_lambda_d = 0.2;
+        const energy_type m_maxz = (const energy_type) ((1.0 + (m_lambda_c + m_lambda_d) * (energy_type) m_nd * (energy_type) m_nd) / (m_lambda_c * m_lambda_d));
+        const phase_type m_first_phase = -((const phase_type) (m_nc / 2));
 
 
         const double m_last_period = m_mind * std::pow(m_dstep, m_nd - 1);
 
-        double cumulative_sum(int v, int start);
+        inline const double cumulative_sum(int v, int start);
 
-        inline const phase_type get_real_phase(phase_type phase, const period_type period_) const {
-            /*
-            uint period = (unsigned int) period_;
-            const unsigned int half_band = period >> 1;
-            int shifted_phase = phase + half_band;
-
-            const int mask = shifted_phase >> sizeof(int) * CHAR_BIT - 1;
-            const uint abs_phase = (unsigned int)(shifted_phase ^ mask) - mask;
-            const phase_type real_phase = (abs_phase  % period) - half_band;
-            return real_phase;
-             */
-            const phase_type half_band = (phase_type) floor(period_) >> 1;
-            const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period_)) - half_band;
+        inline const phase_type get_real_phase(const phase_type phase, const period_type period) const {
+            const phase_type half_band = (phase_type) floor(period) >> 1;
+            const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period)) - half_band;
             return real_phase;
         };
+
+        void distance_transform_phase(data_type *dataset_row_ptr) const;
+
+        void distance_transform_period(data_type *dataset_row_ptr) const;
+
+        void calculate_energy_integral(const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
+                                       const std::vector<energy_type> &max_by_row, size_t row_number,
+                                       data_type *dataset_row_ptr) const;
+
+        old_tuple_type find_row_max(data_type *&dataset_row_ptr, data_type *&pBestNode) const;
+
+        void integrate_row(const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
+                           energy_type Dnrm, data_type *dataset_row_ptr) const;
 
         inline const period_idx_type period_min(const phase_type phase, const period_type *periods) const;
 
