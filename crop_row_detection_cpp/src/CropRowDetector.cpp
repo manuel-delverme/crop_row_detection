@@ -15,7 +15,8 @@
 namespace crd_cpp {
     CropRowDetector::CropRowDetector() {}
 
-    void CropRowDetector::load(cv::Mat const &intensity_map) {
+    void CropRowDetector::load(cv::Mat &intensity_map) {
+        std::cout << "loading...";
         cv::Mat intensity_map_64f;
         intensity_map.convertTo(intensity_map_64f, CV_64F);
         m_integral_image = cv::Mat::zeros(intensity_map.size(), CV_64F);
@@ -31,10 +32,9 @@ namespace crd_cpp {
         data_type *dataset_period_ptr = m_dataset_ptr;
         data_type *dataset_tuple_ptr;
 
-        phase_type phase;
         for (uint period_idx = 0; period_idx < m_nd; period_idx++, dataset_period_ptr += m_nc) {
             dataset_tuple_ptr = dataset_period_ptr;
-            for (phase = m_first_phase; phase < -m_first_phase; phase++, dataset_tuple_ptr++) {
+            for (phase_type phase = m_first_phase; phase < -m_first_phase; phase++, dataset_tuple_ptr++) {
                 dataset_tuple_ptr->tuple_value = 0;
             }
         }
@@ -43,7 +43,8 @@ namespace crd_cpp {
 
 
         // dynamic programming setup
-        m_image_height = (size_t) intensity_map.rows;
+        std::cout << "dyn prog...";
+        m_best_energy_by_row.resize(m_image_height);
         m_search_space_length = (size_t) std::max(m_nd, m_nc);
         m_parabola_center = new phase_type[m_search_space_length];
         m_intersection_points = new energy_type[m_search_space_length + 1];
@@ -52,221 +53,223 @@ namespace crd_cpp {
         m_periods = new period_type[m_nd];
         // TODO: interleave data struct
 
+        // will be used for xcorr
+        std::cout << "xcorr...";
+
+        double halfa;
+        double halfb;
+        double halfd;
+
+        m_positive_pulse_start.resize(m_nd, std::vector<int>(m_nc, 0));
+        m_positive_pulse_end.resize(m_nd, std::vector<int>(m_nc, 0));
+        m_negative_pulse_start.resize(m_nd, std::vector<int>(m_nc, 0));
+        m_negative_pulse_end.resize(m_nd, std::vector<int>(m_nc, 0));
+
+        m_positive_pulse_centers.resize(m_nd, std::vector<double>(m_nc, 0));
+
+        m_xcorr_a.resize(m_nd);
+        m_xcorr_b.resize(m_nd);
+
+
+        // double positive_correlation_value, negative_correlation_value;
+
+        std::vector<double> m_distance_positive_negative_pulse_center(m_nd);
+
+        m_kStarts.resize(m_nd, std::vector<int>(m_nc, 0));
+        m_kEnds.resize(m_nd, std::vector<int>(m_nc, 0));
+
         double period = m_mind;
         for (uint period_idx = 0; period_idx < m_nd; period_idx++, period *= m_dstep) {
             m_periods[period_idx] = (period_type) period;
-        }
-    }
 
-    void
-    CropRowDetector::calculate_energy_integral(const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
-                                               const std::vector<energy_type> &max_by_row, size_t row_number,
-                                               data_type *dataset_row_ptr) const {
-        energy_type b_val;
-        data_type *dataset_tuple_ptr;
-        data_type *dataset_period_ptr;
+            double scale = period * m_period_scale_factor;
+            double period_a = cvFloor(scale * m_positive_pulse_width + .5);
+            m_xcorr_a.at(period_idx) = period_a;
+            halfa = period_a/2;
 
-        period_idx_type period_idx;
-        phase_type phase;
+            double period_b = cvFloor(scale * m_negative_pulse_width + .5);
+            m_xcorr_b.at(period_idx) = period_b;
 
-        energy_type Dnrm = max_by_row[row_number];
-        dataset_period_ptr = dataset_row_ptr;
+            halfb = period_b/2;
+            halfd = period/2;
 
-        for (period_idx = 0; period_idx < this->m_nd; period_idx++, dataset_period_ptr += this->m_nc) {
-            dataset_tuple_ptr = dataset_period_ptr;
-            const period_type period = this->m_periods[period_idx];
-            for (phase = this->m_first_phase; phase < -this->m_first_phase; phase++, dataset_tuple_ptr++) {
-                const phase_type real_phase = this->get_real_phase(phase, period);
-                const energy_type D = energy_map.at(row_number).at(period_idx).at(real_phase - this->m_first_phase);
+            // Calcolo centro dell'onda quadra positiva e negativa
+            double distance_positive_negative_pulse_center = halfd - halfb;
+            m_distance_positive_negative_pulse_center.at(period) = halfd - halfb;
 
-                if (Dnrm >= 1.0) {
-                    b_val = std::min((energy_type) (1.0 - (D / Dnrm)), this->m_maxD);
-                } else {
-                    b_val = this->m_maxD;
-                }
-                b_val += (dataset_tuple_ptr - this->m_row_size)->tuple_value;
-                dataset_tuple_ptr->tuple_value = b_val;
+            phase_type phase;
+            for (uint phase_idx = 0; phase_idx < m_nc; phase_idx++) {
+                phase = phase_idx - m_first_phase;
+
+                int kStart = (int) floor((-(m_image_width / 2 + phase) + halfa) / period);    // offset prima onda
+                m_kStarts.at(period_idx).at(phase_idx) = kStart;
+                m_kEnds.at(period_idx).at(phase_idx) = (int) floor(((m_image_width / 2 - phase) + halfa) / period);   // offset ultima onda prima della fine dell'immagine
+
+                double positive_pulse_center = (double) phase + (double) kStart * period + m_half_width;
+                m_positive_pulse_centers.at(period_idx).at(phase_idx) = positive_pulse_center;
+                m_positive_pulse_start.at(period_idx).at(phase_idx) = cvFloor(positive_pulse_center - halfa);
+                m_negative_pulse_start.at(period_idx).at(phase_idx) = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
+
+                m_positive_pulse_end.at(period_idx).at(phase_idx) = (int) (m_positive_pulse_start.at(period_idx).at(phase_idx) + period_a - 1);
+                m_negative_pulse_end.at(period_idx).at(phase_idx) = (int) (m_negative_pulse_start.at(period_idx).at(phase_idx) + period_b - 1);
             }
         }
-    }
 
-    std::vector<energy_type> CropRowDetector::template_matching(
-            std::vector<std::vector<std::vector<energy_type>>> &energy_map,
-            const cv::Mat &Intensity,
-            const double positive_pulse_width,
-            const double negative_pulse_width,
-            const size_t window_width // w
-    ) {
-        uint image_height = (uint) Intensity.size[0];
-
-        double energy = 0;
-        double best_energy = -1;
-
-        old_tuple_type best_pair;
-        std::vector<energy_type> best_pairs(image_height);
-
-        // initialize 3d vector
-        energy_map.resize(image_height + 1);
-        for (uint i = 0; i < image_height + 1; i++) {
-            energy_map.at(i).resize(m_nd);
+        //xcorr setup
+        m_energy_map.resize(m_image_height + 1);
+        for (uint i = 0; i < m_image_height + 1; i++) {
+            m_energy_map.at(i).resize(m_nd);
             for (uint j = 0; j < m_nd; ++j)
-                energy_map.at(i).at(j).resize(m_nc);
+                m_energy_map.at(i).at(j).resize(m_nc);
         }
+        m_best_energy_by_row.resize(m_image_height + 1);
+        // Calcolo quantità necesarrie a CrossCorrelation
+    }
+    void CropRowDetector::template_matching() {
 
-        for (uint image_row_num = 0; image_row_num < image_height; image_row_num++) {
-            for (uint period_idx = 0; period_idx < m_nd; period_idx++) {
-                const period_type period = m_periods[period_idx];
+        period_type period;
+        phase_type first_phase;
 
-                for (phase_type phase = m_first_phase; phase < -m_first_phase; phase++) {
-                    energy = CrossCorrelation(image_row_num, phase, period, positive_pulse_width, negative_pulse_width,
-                                              (const int) window_width);
+        int period_idx;
+        double period_scale; // TODO: store in memory
+        energy_type bestScore;
+        double halfa, halfb, halfd;
+        double fTmp; // TODO rename me
+        double a, b; // TODO rename me
+        int phase;
+        int kStart, kEnd;
+        energy_type score;
 
-                    energy_map[image_row_num][period_idx][phase - m_first_phase] = energy;
-                    if (energy > best_energy) {
-                        best_energy = energy;
+        double distance_positive_negative;
+
+        int positive_pulse_start;
+        int positive_pulse_end;
+        double positive_correlation_value;
+        int positive_pixels;
+        int negative_pulse_start;
+        int negative_pulse_end;
+        double negative_correlation_value;
+        int negative_pixels;
+        double positive_pulse_center;
+        double distance_positive_negative_pulse_center;
+
+        for(int image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
+            bestScore = 0.0;
+
+            for(period_idx = 0; period_idx < m_nd; period_idx++){
+                period = m_periods[period_idx];
+                first_phase = (int) floor(0.5 * period);
+
+                period_scale = period * m_period_scale_factor;
+                fTmp = floor(period_scale * m_positive_pulse_width + 0.5);
+                a = (int) fTmp;
+                halfa = 0.5 * fTmp;
+                fTmp = floor(period_scale * m_negative_pulse_width + 0.5);
+                b = (int) fTmp;
+                halfb = 0.5 * fTmp;
+                halfd = 0.5 * period;
+                distance_positive_negative = halfd - halfb;
+                distance_positive_negative_pulse_center = halfd - halfb;
+
+                const int num_phases = first_phase * 2;
+                for (uint phase_idx = 0; phase_idx < num_phases; phase_idx++) {
+                    phase = phase_idx - first_phase;
+                    kStart = (int) floor((-(double) (m_image_width / 2 + phase) + halfa) / period);
+                    kEnd = (int) floor(((double) (m_image_width / 2 - phase) + halfa) / period);
+
+                    positive_pulse_center = (double) phase + (double) kStart * period + m_half_width;
+                    positive_pulse_start = cvFloor(positive_pulse_center - halfa);
+                    positive_pulse_end = positive_pulse_start + a - 1;
+
+                    negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative);
+                    negative_pulse_end = negative_pulse_start + b - 1;
+
+                    if (positive_pulse_end >= 0) {
+                        positive_correlation_value = m_integral_image.at<double>(image_row_num, positive_pulse_end);
+                        positive_pixels = positive_pulse_end;
+                    } else {
+                        positive_correlation_value = 0;
+                        positive_pixels = 0;
+                    }
+
+                    if (negative_pulse_start < 0)
+                        negative_pulse_start = 0;
+
+                    if (negative_pulse_end >= 0) {
+                        if (negative_pulse_start > 0)
+                            negative_correlation_value = cumulative_sum(image_row_num, negative_pulse_end)
+                                                         - cumulative_sum(image_row_num, negative_pulse_start - 1);
+                        else if (negative_pulse_start <= 0)
+                            negative_correlation_value = cumulative_sum(image_row_num, negative_pulse_end)
+                                                         - cumulative_sum(image_row_num, negative_pulse_start);
+                        negative_pixels = (negative_pulse_end - negative_pulse_start + 1);
+                    } else {
+                        negative_correlation_value = 0;
+                        negative_pixels = 0;
+                    }
+
+                    positive_pulse_center += period;
+                    for (int k = kStart + 1; k < kEnd; k++, positive_pulse_center += period) {
+
+                        positive_pulse_start = cvFloor(positive_pulse_center - halfa);
+
+                        positive_pulse_end = positive_pulse_start + a - 1;
+
+                        positive_correlation_value += cumulative_sum(image_row_num, positive_pulse_end)
+                                                      - cumulative_sum(image_row_num, positive_pulse_start - 1);
+
+                        positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
+
+                        negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
+
+                        negative_pulse_end = negative_pulse_start + b - 1;
+
+                        negative_correlation_value += cumulative_sum(image_row_num, negative_pulse_end)
+                                                      - cumulative_sum(image_row_num, negative_pulse_start - 1);
+                        negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
+                    }
+
+
+                    positive_pulse_start = cvFloor(positive_pulse_center - halfa);
+                    positive_pulse_end = positive_pulse_start + a - 1;
+
+                    if (positive_pulse_end >= m_image_width)
+                        positive_pulse_end = m_image_width - 1;
+
+                    positive_correlation_value += cumulative_sum(image_row_num, positive_pulse_end)
+                                                  - cumulative_sum(image_row_num, positive_pulse_start - 1);
+                    positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
+
+                    negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
+                    if (negative_pulse_start < m_image_width) {
+                        negative_pulse_end = negative_pulse_start + b - 1;
+
+                        if (negative_pulse_end >= m_image_width)
+                            negative_pulse_end = m_image_width - 1;
+
+                        negative_correlation_value += cumulative_sum(image_row_num, negative_pulse_end)
+                                                      - cumulative_sum(image_row_num, negative_pulse_start - 1);
+                        negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
+                    }
+                    score = (energy_type) (negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) / (double) (positive_pixels * negative_pixels);        // new score computation
+                    m_energy_map.at(image_row_num + 1).at(period_idx).at(phase_idx) = score;
+                    if (score > bestScore) {
+                        bestScore = score;
                     }
                 }
             }
-            best_pairs.at(image_row_num) = best_energy;
-            best_energy = -1;
+            m_best_energy_by_row.at(image_row_num) = bestScore;
         }
-        return best_pairs;
     }
-
-    inline double CropRowDetector::CrossCorrelation(const uint row_number,
-                                                    phase_type phase, period_type period,
-                                                    const double positive_pulse_width,
-                                                    const double negative_pulse_width,
-                                                    const int image_width) {
-        // Calcolo quantità necesarrie a CrossCorrelation
-        const double scale = period * m_period_scale_factor;
-
-        const int a = cvFloor(scale * positive_pulse_width + .5);
-        int b = cvFloor(scale * negative_pulse_width + .5);
-
-        int negative_pulse_end, negative_pulse_start, positive_pulse_end, positive_pulse_start, positive_pixels, negative_pixels;
-        double positive_correlation_value, negative_correlation_value;
-
-        double halfb = .5 * b;
-        double halfa = .5 * a;
-        double halfd = .5 * period;
-
-        int kStart = (int) floor((-(image_width / 2 + phase) + halfa) / period);    // offset prima onda
-        int kEnd = (int) floor(
-                ((image_width / 2 - phase) + halfa) / period);   // offset ultima onda prima della fine dell'immagine
-
-        // Calcolo centro dell'onda quadra positiva e negativa
-        double distance_positive_negative_pulse_center = halfd - halfb;
-        double positive_pulse_center = (double) phase + (double) kStart * (double) period + m_half_width;
-
-        // Calcolo per Onda ad inizio immagine, non calcolabile con la classica routine
-
-        positive_pulse_start = cvFloor(positive_pulse_center - halfa);
-        positive_pulse_end = positive_pulse_start + a - 1;
-
-        negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
-        negative_pulse_end = negative_pulse_start + b - 1;
-
-        if (positive_pulse_end >= 0) {
-            positive_correlation_value = cumulative_sum(row_number, positive_pulse_end);
-            positive_pixels = positive_pulse_end;
-        } else {
-            positive_correlation_value = 0;
-            positive_pixels = 0;
-        }
-
-        if (negative_pulse_start < 0)
-            negative_pulse_start = 0;
-
-        if (negative_pulse_end >= 0) {
-            if (negative_pulse_start > 0)
-                negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
-                                             - cumulative_sum(row_number, negative_pulse_start -
-                                                                          1); //tolto  -cumulative_sum(row_number, negative_pulse_start-1);
-            else if (negative_pulse_start <= 0)
-                negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
-                                             - cumulative_sum(row_number, negative_pulse_start);
-            /*if(row_number==0) {
-                cout << "2 " << cumulative_sum(row_number, negative_pulse_end) << " " << -cumulative_sum(row_number, negative_pulse_start) <<
-        std::cout << "p" << ++ping_cnt;
-                     " " << negative_pulse_end << " " << negative_pulse_start << endl;
-            }*/
-            negative_pixels = negative_pulse_end - negative_pulse_start + 1;
-        } else {
-            negative_correlation_value = 0;
-            negative_pixels = 0;
-        }
-
-        /*if(row_number==2)
-            cout <<  positive_pulse_start << " " << positive_pulse_end << " " << negative_pulse_start << " " << negative_pulse_end << endl;*/
-
-        positive_pulse_center += period;
-
-        for (int k = kStart + 1; k < kEnd; k++, positive_pulse_center += period) {
-
-            positive_pulse_start = cvFloor(positive_pulse_center - halfa);
-            positive_pulse_end = positive_pulse_start + a - 1;
-
-            positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
-                                          - cumulative_sum(row_number, positive_pulse_start - 1);
-
-            positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
-
-            negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
-            negative_pulse_end = negative_pulse_start + b - 1;
-
-            negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
-                                          - cumulative_sum(row_number, negative_pulse_start - 1);
-
-            negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
-            /*if(row_number==2)
-                cout <<  k << " " << positive_pulse_start << " " << positive_pulse_end << " " << negative_pulse_start << " " << negative_pulse_end << endl;*/
-
-        }
-        positive_pulse_start = cvFloor(positive_pulse_center - halfa);
-
-        positive_pulse_end = positive_pulse_start + a - 1;
-
-        if (positive_pulse_end >= image_width)
-            positive_pulse_end = image_width - 1;
-        /*if(row_number==6)
-            cout << cumulative_sum(row_number, positive_pulse_end) << " " << -cumulative_sum(row_number, positive_pulse_start-1) <<endl;*/
-        positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
-                                      - cumulative_sum(row_number, positive_pulse_start - 1);
-
-        positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
-
-
-        negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
-        if (negative_pulse_start < image_width) {
-            negative_pulse_end = negative_pulse_start + b - 1;
-
-            if (negative_pulse_end >= image_width)
-                negative_pulse_end = image_width - 1;
-
-            negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
-                                          - cumulative_sum(row_number, negative_pulse_start - 1);
-
-            negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
-        }
-
-        double score =
-                (double) (negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) /
-                (double) (positive_pixels * negative_pixels);
-        return score;
-    }
-
 
      inline const double CropRowDetector::cumulative_sum(const int v, const int start) {
         return m_integral_image.at<double>(v, start);
     }
 
-    std::vector<old_tuple_type>
-    CropRowDetector::find_best_parameters(
-            const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
+    std::vector<old_tuple_type> CropRowDetector::find_best_parameters(
+            const energy_map_type &energy_map,
             const std::vector<energy_type> &max_by_row
     ) {
-
         energy_type numerator;
         energy_type b_val;
 
@@ -452,19 +455,6 @@ namespace crd_cpp {
             m_best_nodes.at(row_number) = std::make_pair(best_phase, best_period);
         }
         return m_best_nodes;
-    }
-
-    // TODO: cache values
-    const period_idx_type CropRowDetector::period_min(const phase_type phase, const period_type *periods) const {
-        period_type period_min;
-        if (phase < 0) {
-            period_min = (period_type) (2 * -phase);
-        } else {
-            period_min = (period_type) (2 * (phase + 1));
-        }
-        period_idx_type period_idx;
-        for (period_idx = 0; periods[period_idx] < period_min - 1 && period_idx < m_nd; period_idx++);
-        return period_idx;
     }
 
     void CropRowDetector::teardown() {

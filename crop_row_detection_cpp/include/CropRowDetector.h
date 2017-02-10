@@ -12,6 +12,7 @@ namespace crd_cpp {
     typedef double energy_type;
     typedef std::pair<phase_type, period_type> old_tuple_type;
     typedef std::pair<phase_type, size_t> tuple_type;
+    typedef std::vector<std::vector<std::vector<energy_type>>> energy_map_type;
 
     struct data_type {
         energy_type tuple_value;
@@ -24,40 +25,46 @@ namespace crd_cpp {
 
         CropRowDetector();
 
-        void load(const cv::Mat &intensity);
+        void load(cv::Mat &intensity_map);
 
         void teardown();
 
         inline double CrossCorrelation(
                 const uint row_number,
-                phase_type phase, period_type period,
-                const double positive_pulse_width,
-                const double negative_pulse_width,
-                const int image_width
+                const phase_type phase,
+                const period_idx_type period_idx
         );
 
         std::vector<old_tuple_type> find_best_parameters(
-                const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
+                const energy_map_type &energy_map,
                 const std::vector<energy_type> &best_pairs
         );
 
-        std::vector<energy_type>
-        template_matching(
-                std::vector<std::vector<std::vector<energy_type>>> &energy_map,
-                const cv::Mat &Intensity,
-                const double positive_pulse_width,
-                const double negative_pulse_width,
-                const size_t window_width
-        );
+        void template_matching();
 
+        std::vector<std::vector<std::vector<energy_type>>> m_energy_map;
         const period_type m_mind = 8;
         const int m_ndOctaves = 5;
         const int m_ndSamplesPerOctave = 70;
         const double m_dstep = std::pow(2.0, 1.0 / (double) m_ndSamplesPerOctave);
         const uint m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
         const uint m_nc = (int) floor((double) m_mind * pow(m_dstep, m_nd)) + 1;
-        size_t m_image_height;
+
+        std::vector<std::vector<int>> m_kStarts;
+        std::vector<std::vector<int>> m_kEnds;
+        // std::vector<double> m_period_scale(m_nd);
+
+        std::vector<std::vector<int>> m_positive_pulse_start;
+        std::vector<std::vector<int>> m_positive_pulse_end;
+        std::vector<std::vector<int>> m_negative_pulse_start;
+        std::vector<std::vector<int>> m_negative_pulse_end;
+        std::vector<double> m_xcorr_a;
+        std::vector<double> m_xcorr_b;
+
+        std::vector<std::vector<double>> m_positive_pulse_centers;
+
         const uint m_row_size = m_nc * m_nd;
+        std::vector<energy_type> m_best_energy_by_row;
 
     private:
         data_type *m_dataset_ptr;
@@ -71,6 +78,11 @@ namespace crd_cpp {
 
         double m_half_width;
         double m_period_scale_factor;
+
+        const double m_positive_pulse_width = 1.28; // a0
+        const double m_negative_pulse_width = 4.48; // b0
+        const int m_image_width = 400;
+        const int m_image_height = 300;
 
         const float m_f_low = 1.0;
         const energy_type m_maxD = 1.5;

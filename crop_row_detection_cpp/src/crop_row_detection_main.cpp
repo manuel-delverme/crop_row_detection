@@ -103,10 +103,8 @@ namespace crd_cpp {
         for (cv::Mat &pIntensityImg : images) {
 
             row_detector.load(pIntensityImg);
-            std::vector<energy_type> max_by_row = row_detector.template_matching(energy_map, pIntensityImg,
-                                                                                       settings["a0"], settings["b0"],
-                                                                                       (size_t) settings["width"]);
-            std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(energy_map, max_by_row);
+            row_detector.template_matching();
+            std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
 
             plot_template_matching(pIntensityImg, min_energy_results);
 
