@@ -27,7 +27,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} \
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
     -std=c++14 \
     -Ofast \
-    -ftree-loop-if-convert \
     -O2 \
     -pipe \
     -march=native")

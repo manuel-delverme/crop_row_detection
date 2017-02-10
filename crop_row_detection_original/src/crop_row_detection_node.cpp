@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
 
     ros::Subscriber img_sub = nh.subscribe<sensor_msgs::Image>("/camera/image_raw", 1, image_cb);
 
-    string cfg_filename = "/home/awok/catkin_ws/src/crop_row_detection/crop_row_detection_original/cfg/params.cfg";
+    string cfg_filename = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_original/cfg/params.cfg";
 
     cfg_filename = nh.param("cfg_filename", cfg_filename);
 
@@ -92,17 +92,21 @@ int main(int argc, char **argv) {
         ROS_INFO("Config file does not exist!");
         return 0;
     }
+    cout << "initingDetector .." << std::endl;
     initDetector(cfg_filename);
 
-    string image_path = "/home/awok/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/download.jpg";
-    string image_path_cpp = "/home/awok/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/";
+    string image_path = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/download.jpg";
+    string image_path_cpp = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/";
+    cout << "loading image..";
     cv::Mat im = imread(image_path);
+    cout << "resizing.." << endl;
     resize(im, im, Size(w, h));
 
     IplImage *pInputImage = new IplImage(im);
     IplImage *ExGImage;
     IplImage *pDisplay = cvCreateImage(cvSize(w, h), IPL_DEPTH_8U, 3);
 
+    cout << "creating ExG.." << endl;
     ExGImage = cvCreateImage(cvSize(w, h), 8, 1);
 
     //---------- CROP ROW DETECTION CPP SETUP ----------
@@ -116,39 +120,41 @@ int main(int argc, char **argv) {
     crd_cpp::ImagePreprocessor preprocessor(image_path_cpp, image_size);
     crd_cpp::CropRowDetector row_detector = crd_cpp::CropRowDetector();
 
-    auto Xs = preprocessor.get_Xs(row_detector.m_mind, row_detector.m_nd, row_detector.m_dstep);
-
     std::vector<std::vector<std::vector<crd_cpp::energy_type>>> energy_map;
     std::vector<cv::Mat> images = preprocessor.process();
     cv::Mat &pIntensityImg = images.at(0);
 
+    std::cout << "loading" << std::endl;
     row_detector.load(pIntensityImg);
 
     std::clock_t start;
 
-    std::cout << "START" << std::endl;
+    std::cout << "loaded" << std::endl;
     start = std::clock();
-    std::cout << "ping" << std::endl;
-    auto max_by_row = row_detector.template_matching(energy_map, pIntensityImg, Xs, settings["a0"], settings["b0"],
-                                                        (size_t) settings["width"]);
-    std::cout << "ping" << std::endl;
+
+    row_detector.template_matching();
     std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms"
               << std::endl;
+    std::cout << "plotting" << std::endl;
+    for(int i=0; i<10; i++)
+        std::cout << "xcorr " << row_detector.m_best_energy_by_row.at(i) << std::endl;
 
-    std::cout << "START" << std::endl;
+    std::cout << "optimization:" << std::endl;
     start = std::clock();
-    auto min_energy_results = row_detector.find_best_parameters(energy_map, max_by_row);
+    auto min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
     std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
     CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width, pInputImage->height);
 
+    std::cout << "teardown" << std::endl;
     row_detector.teardown();
 
+    std::cout << "plotting" << std::endl;
     if(argc > 1)
         crd_cpp::plot_template_matching(pIntensityImg, min_energy_results);
 
-    // cvShowImage("Crop Rows BGR", ExGImage);
-    // cvSaveImage("ExG.png", ExGImage);
+    cvShowImage("Crop Rows BGR", ExGImage);
+    cvSaveImage("ExG.png", ExGImage);
 
     //Apply crop row detection method
     std::cout << "START" << std::endl;
@@ -156,12 +162,13 @@ int main(int argc, char **argv) {
     CRD.Apply((unsigned char *) ExGImage->imageData, w, 0);
     std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-    // cvCopy(pInputImage, pDisplay);
+//   cvCvtColor(pInputImage, pDisplay, CV_GRAY2RGB);
+    cvCopy(pInputImage, pDisplay);
 
-    // CRD.Display((unsigned char *) (pDisplay->imageData), w);
-    // cvShowImage("Crop Rows BGR", pDisplay);
+    CRD.Display((unsigned char *) (pDisplay->imageData), w);
+    cvShowImage("Crop Rows BGR", pDisplay);
 
-    // cvWaitKey(0);
+    cvWaitKey(0);
 
 
     // while (ros::ok())
