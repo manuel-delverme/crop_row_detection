@@ -41,6 +41,7 @@ namespace crd_cpp {
         );
 
         void template_matching();
+        void graph_search();
 
         std::vector<std::vector<std::vector<energy_type>>> m_energy_map;
         const period_type m_mind = 8;

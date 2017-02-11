@@ -129,15 +129,17 @@ int main(int argc, char **argv) {
 
     std::clock_t start;
 
-    std::cout << "loaded" << std::endl;
-    start = std::clock();
 
+    std::cout << "loaded" << std::endl;
+
+    start = std::clock();
+    row_detector.graph_search();
+    std::cout << "graph time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+    exit(1);
+
+    start = std::clock();
     row_detector.template_matching();
-    std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms"
-              << std::endl;
-    std::cout << "plotting" << std::endl;
-    for(int i=0; i<10; i++)
-        std::cout << "xcorr " << row_detector.m_best_energy_by_row.at(i) << std::endl;
+    std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
     std::cout << "optimization:" << std::endl;
     start = std::clock();
@@ -150,11 +152,12 @@ int main(int argc, char **argv) {
     row_detector.teardown();
 
     std::cout << "plotting" << std::endl;
-    if(argc > 1)
-        crd_cpp::plot_template_matching(pIntensityImg, min_energy_results);
 
-    cvShowImage("Crop Rows BGR", ExGImage);
-    cvSaveImage("ExG.png", ExGImage);
+    if(argc > 1){
+        crd_cpp::plot_template_matching(pIntensityImg, min_energy_results);
+        cvShowImage("Crop Rows BGR", ExGImage);
+        cvSaveImage("ExG.png", ExGImage);
+    }
 
     //Apply crop row detection method
     std::cout << "START" << std::endl;
@@ -162,13 +165,13 @@ int main(int argc, char **argv) {
     CRD.Apply((unsigned char *) ExGImage->imageData, w, 0);
     std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-//   cvCvtColor(pInputImage, pDisplay, CV_GRAY2RGB);
     cvCopy(pInputImage, pDisplay);
 
     CRD.Display((unsigned char *) (pDisplay->imageData), w);
-    cvShowImage("Crop Rows BGR", pDisplay);
+    if(argc > 1)
+        cvShowImage("Crop Rows BGR", pDisplay);
+        cvWaitKey(0);
 
-    cvWaitKey(0);
 
 
     // while (ros::ok())
