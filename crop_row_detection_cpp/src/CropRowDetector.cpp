@@ -16,17 +16,28 @@ namespace crd_cpp {
     CropRowDetector::CropRowDetector() {}
 
     void CropRowDetector::load(cv::Mat &intensity_map) {
-        std::cout << "loading...";
+        std::cout << "cpp::loading..." << std::endl;
         cv::Mat intensity_map_64f;
         intensity_map.convertTo(intensity_map_64f, CV_64F);
         m_integral_image = cv::Mat::zeros(intensity_map.size(), CV_64F);
 
         for (int row = 0; row < intensity_map.rows; row++) {
+            // m_integral_image.at<double>(row, 0) = (double) intensity_map.at<uchar>(row, 0);
             for (int column = 1; column < intensity_map.cols; column++) {
                 m_integral_image.at<double>(row, column) =
                         (double) intensity_map.at<uchar>(row, column) + m_integral_image.at<double>(row, column - 1);
             }
         }
+
+        for (int column = 0; column < 10; column++) {
+            std::cout << "cpp::I " << (double) intensity_map.at<char>(0, column) << std::endl;
+        }
+
+        for (int column = 0; column < 10; column++) {
+            std::cout << "cpp::II " << m_integral_image.at<double>(0, column) << std::endl;
+        }
+
+        // 1 + is an hack
         m_dataset_ptr = new data_type[(1 + intensity_map.rows) * m_nd * m_nc];
 
         data_type *dataset_period_ptr = m_dataset_ptr;
@@ -169,12 +180,11 @@ namespace crd_cpp {
 
         for (uint image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
             for (period_idx_type period_idx = 0; period_idx < m_nd; period_idx++) {
-                const phase_type num_phases = (const phase_type) floor(m_periods[period_idx]);
-                phase_type first_phase = -num_phases/2;
-                phase_type last_phase = num_phases + first_phase;
-                for (phase_type phase = first_phase; phase < last_phase; phase++) {
+                const phase_type half_band = (const phase_type) std::floor(m_periods[period_idx] / 2);
+                int phase_idx = - m_first_phase - half_band;
+                for (phase_type phase = -half_band; phase < half_band; phase++, phase_idx++) {
                     energy = CrossCorrelation(image_row_num, phase, period_idx);
-                    m_energy_map.at(image_row_num).at(period_idx).at(phase - m_first_phase) = energy;
+                    m_energy_map.at(image_row_num).at(period_idx).at(phase_idx) = energy;
                     if (energy > best_energy) {
                         best_energy = energy;
                     }
@@ -210,11 +220,13 @@ namespace crd_cpp {
 
         // Calcolo per Onda ad inizio immagine, non calcolabile con la classica routine
 
-        positive_pulse_start = cvFloor(positive_pulse_center - halfa);
+    positive_pulse_start = std::floor(positive_pulse_center - halfa);
         positive_pulse_end = positive_pulse_start + a - 1;
 
-        negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
+    negative_pulse_start = std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
         negative_pulse_end = negative_pulse_start + b - 1;
+
+    //cout << positive_pulse_center <<  " " << halfa << " " << positive_pulse_start << " " << positive_pulse_end << " " << negative_pulse_start << " " << negative_pulse_end << endl;
 
         if (positive_pulse_end >= 0) {
             positive_correlation_value = cumulative_sum(row_number, positive_pulse_end);
@@ -228,22 +240,24 @@ namespace crd_cpp {
             negative_pulse_start = 0;
 
         if (negative_pulse_end >= 0) {
-            if (negative_pulse_start > 0)
                 negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
-                                             - cumulative_sum(row_number, negative_pulse_start - 1);
-            else if (negative_pulse_start <= 0)
-                negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
-                                             - cumulative_sum(row_number, negative_pulse_start);
+					-cumulative_sum(row_number, negative_pulse_start); //tolto  -cumulative_sum(row_number, negative_pulse_start-1);
+
             negative_pixels = negative_pulse_end - negative_pulse_start + 1;
-        } else {
-            negative_correlation_value = 0;
-            negative_pixels = 0;
         }
+    else {
+      negative_correlation_value = 0;
+      negative_pixels = 0;
+    }
+
 
         positive_pulse_center += period;
         for (int k = kStart + 1; k < kEnd; k++, positive_pulse_center += period) {
 
-            positive_pulse_start = cvFloor(positive_pulse_center - halfa);
+
+
+
+	positive_pulse_start = std::floor(positive_pulse_center - halfa);
             positive_pulse_end = positive_pulse_start + a - 1;
 
             positive_correlation_value += cumulative_sum(row_number, positive_pulse_end)
@@ -251,7 +265,7 @@ namespace crd_cpp {
 
             positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
 
-            negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
+	negative_pulse_start = std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
             negative_pulse_end = negative_pulse_start + b - 1;
 
             negative_correlation_value += cumulative_sum(row_number, negative_pulse_end)
@@ -259,7 +273,8 @@ namespace crd_cpp {
 
             negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
         }
-        positive_pulse_start = cvFloor(positive_pulse_center - halfa);
+
+    positive_pulse_start = std::floor(positive_pulse_center - halfa);
 
         positive_pulse_end = positive_pulse_start + a - 1;
 
@@ -271,8 +286,10 @@ namespace crd_cpp {
 
         positive_pixels += (positive_pulse_end - positive_pulse_start + 1);
 
-        negative_pulse_start = DOUBLE2INT(positive_pulse_center + distance_positive_negative_pulse_center);
-        if (negative_pulse_start < m_image_width) {
+
+    negative_pulse_start = std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
+    if(negative_pulse_start < m_image_width)
+    {
             negative_pulse_end = negative_pulse_start + b - 1;
 
             if (negative_pulse_end >= m_image_width) {
@@ -283,9 +300,7 @@ namespace crd_cpp {
             negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
         }
 
-        double score = (double) (negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) /
-                (double) (positive_pixels * negative_pixels);
-        return score;
+    return (double)(negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) / (double)(positive_pixels * negative_pixels);
     }
 
 

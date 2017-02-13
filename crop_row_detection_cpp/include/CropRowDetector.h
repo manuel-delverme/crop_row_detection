@@ -66,12 +66,19 @@ namespace crd_cpp {
         const uint m_row_size = m_nc * m_nd;
         std::vector<energy_type> m_best_energy_by_row;
 
+
+        period_type *m_periods;
+        inline const phase_type get_real_phase(const phase_type phase, const period_type period) const {
+            const phase_type half_band = (phase_type) floor(period) >> 1;
+            const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period)) - half_band;
+            return real_phase;
+        };
+
     private:
         data_type *m_dataset_ptr;
         size_t m_search_space_length;
         int *m_parabola_center;
         energy_type *m_intersection_points;
-        period_type *m_periods;
         std::vector<old_tuple_type> m_best_nodes;
         cv::Mat m_integral_image;
         // std::vector<period_type> m_period_map;
@@ -95,12 +102,6 @@ namespace crd_cpp {
         const double m_last_period = m_mind * std::pow(m_dstep, m_nd - 1);
 
         inline const double cumulative_sum(int v, int start);
-
-        inline const phase_type get_real_phase(const phase_type phase, const period_type period) const {
-            const phase_type half_band = (phase_type) floor(period) >> 1;
-            const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period)) - half_band;
-            return real_phase;
-        };
 
         void distance_transform_phase(data_type *dataset_row_ptr) const;
 
