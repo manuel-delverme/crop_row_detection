@@ -9,9 +9,8 @@
 #include "ImagePreprocessor.h"
 
 namespace crd_cpp {
-    ImagePreprocessor::ImagePreprocessor(std::string images_path, cv::Size target_size) {
-        m_size = target_size;
-        m_images_folder = images_path;
+    ImagePreprocessor::ImagePreprocessor(cv::Size target_size) {
+        m_image_size = target_size;
     }
 
     cv::Mat ImagePreprocessor::convertToExG(cv::Mat &image) {
@@ -59,44 +58,34 @@ namespace crd_cpp {
         return intensity;
     }
 
-    std::vector<cv::Mat> ImagePreprocessor::process() {
-        std::vector<cv::Mat> images;
-        cv::String path(m_images_folder + "*");
-        std::vector<cv::String> file_names;
-        cv::glob(path, file_names, true); // recurse
+    cv::Mat ImagePreprocessor::process(std::string image_path) {
+        cv::Mat image = cv::imread(image_path, CV_LOAD_IMAGE_COLOR);
+        cv::Mat resized_image;
+        cv::resize(image, resized_image, m_image_size);
+        cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
 
-        for (std::string file_path : file_names) {
-            cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
-            // if (im.empty()) continue; //only proceed if
-            cv::Mat resized_image;
-            cv::resize(image, resized_image, cv::Size(400, 300));//m_size); // settings["image_size"]);
+        cv::Mat down_ExG_;
+        down_ExG_ = cv::Mat::zeros(cv::Size(intensity.cols / 2, intensity.rows / 2), intensity.type());
 
-            cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
+        //std::cout << intensity.size() << " " << down_ExG_.size() << std::endl;
 
-            cv::Mat down_ExG_;
-            down_ExG_ = cv::Mat::zeros(cv::Size(intensity.cols / 2, intensity.rows / 2), intensity.type());
+        // Downsampling ottimo
+        for (int row = 0; row < intensity.rows / 2; row++) {
+            for (int column = 0; column < intensity.cols / 2; column++) {
 
-            //std::cout << intensity.size() << " " << down_ExG_.size() << std::endl;
+                int max = intensity.at<uchar>((row - 1) * 2, (column - 1) * 2);
+                if (intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2) > max)
+                    max = intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2);
+                if (intensity.at<uchar>((row - 1) * 2, (column - 1) * 2 + 1) > max)
+                    max = intensity.at<uchar>((row - 1) * 2, (column - 1) * 2 + 1);
+                if (intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2 + 1) > max)
+                    max = intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2 + 1);
 
-            // Downsampling ottimo
-            for (int row = 0; row < intensity.rows / 2; row++) {
-                for (int column = 0; column < intensity.cols / 2; column++) {
-
-                    int max = intensity.at<uchar>((row - 1) * 2, (column - 1) * 2);
-                    if (intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2) > max)
-                        max = intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2);
-                    if (intensity.at<uchar>((row - 1) * 2, (column - 1) * 2 + 1) > max)
-                        max = intensity.at<uchar>((row - 1) * 2, (column - 1) * 2 + 1);
-                    if (intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2 + 1) > max)
-                        max = intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2 + 1);
-
-                    down_ExG_.at<uchar>(row, column) = max;
-                }
-
+                down_ExG_.at<uchar>(row, column) = max;
             }
-            images.push_back(intensity);
+
         }
-        return images;
+        return intensity;
     }
 }
 

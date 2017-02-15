@@ -20,12 +20,12 @@ namespace crd_cpp {
         period_idx_type d;
     };
 
-    class CropRowDetector {
+    class CropRowDetector{
     public:
 
         CropRowDetector();
 
-        void load(cv::Mat &intensity_map);
+        void load(cv::Size image_size);
 
         void teardown();
 
@@ -40,7 +40,7 @@ namespace crd_cpp {
                 const std::vector<energy_type> &best_pairs
         );
 
-        void template_matching();
+        void template_matching(cv::Mat intensity_map);
 
         std::vector<std::vector<std::vector<energy_type>>> m_energy_map;
         const period_type m_mind = 8;
@@ -73,6 +73,8 @@ namespace crd_cpp {
             const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period)) - half_band;
             return real_phase;
         };
+        const int m_image_width = 400;
+        const int m_image_height = 300;
 
     private:
         data_type *m_dataset_ptr;
@@ -88,8 +90,6 @@ namespace crd_cpp {
 
         const double m_positive_pulse_width = 1.28; // a0
         const double m_negative_pulse_width = 4.48; // b0
-        const int m_image_width = 400;
-        const int m_image_height = 300;
 
         const float m_f_low = 1.0;
         const energy_type m_maxD = 1.5;
@@ -117,7 +117,6 @@ namespace crd_cpp {
                            energy_type Dnrm, data_type *dataset_row_ptr) const;
 
         inline const period_idx_type period_min(const phase_type phase, const period_type *periods) const;
-
     };
 }
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
