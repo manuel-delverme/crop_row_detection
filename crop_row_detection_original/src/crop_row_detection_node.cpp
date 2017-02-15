@@ -13,14 +13,11 @@
 #include <crop_row_detection.h>
 #include <ImagePreprocessor.h>
 
-using namespace std;
-using namespace cv;
-
 CRVLCropRowDetector CRD;
 CRVLVisionSystem VS;
 int w, h;
 
-void initDetector(string cfg_filename) {
+void initDetector(std::string cfg_filename) {
     char ConfigFileName[255];
     strcpy(ConfigFileName, cfg_filename.c_str());
 
@@ -51,7 +48,7 @@ void initDetector(string cfg_filename) {
 void image_cb(const sensor_msgs::ImageConstPtr &img_msg) {
     cv::Mat im = cv_bridge::toCvShare(img_msg, "bgr8")->image;
 
-    resize(im, im, Size(w, h));
+    cv::resize(im, im, cv::Size(w, h));
 
     IplImage *pInputImage = new IplImage(im);
     IplImage *ExGImage;
@@ -74,102 +71,177 @@ void image_cb(const sensor_msgs::ImageConstPtr &img_msg) {
     cvWaitKey(10);
 }
 
-int main(int argc, char **argv) {
+void
+score_xcorr(const crd_cpp::CropRowDetector &row_detector, const std::vector<crd_cpp::old_tuple_type> &min_energy_results) {
+    RVLCRD_DPDATA *DP_ = CRD.m_DPData;
+    RVLCRD_DPDATA *DP__, *pDP, *pDP_;
+    // std::string a;
+
+    double xcorr_err = 0;
+    int values = 0;
+    for (uint image_row_num = 0; image_row_num < min_energy_results.size(); image_row_num++, DP_ += row_detector.m_row_size) {
+        DP__ = DP_;
+
+        for (crd_cpp::period_idx_type period_idx = 0; period_idx < CRD.m_nd; period_idx++, DP__ += CRD.m_nc) {
+            crd_cpp::period_type period = row_detector.m_periods[period_idx];
+            const crd_cpp::phase_type num_phases = (const crd_cpp::phase_type) floor(period);
+            crd_cpp::phase_type first_phase = -num_phases / 2;
+            crd_cpp::phase_type last_phase = num_phases + first_phase;
+
+            // original
+            int crange = (int) floor(0.5 * period);
+            pDP = DP__ + CRD.m_nc / 2 - crange;
+            for (crd_cpp::phase_type phase = first_phase; phase < last_phase; phase++, pDP++) {
+                const crd_cpp::phase_type real_phase = row_detector.get_real_phase(phase, period);
+                auto phase_idx = real_phase - first_phase;
+
+                const crd_cpp::energy_type energy = row_detector.m_energy_map.at(image_row_num).at(period_idx).at(phase_idx);
+                auto target_energy = pDP->D;
+                auto error = target_energy - energy;
+                xcorr_err += std::abs(error);
+                values++;
+            }
+        }
+    }
+    std::cout << "xcorr err:" << xcorr_err / values << std::endl;
+}
+
+void
+score_optimization(const crd_cpp::CropRowDetector &row_detector, std::vector<crd_cpp::old_tuple_type> &min_energy_results) {
+    double total_err = 0;
+    for (size_t image_row_num = 0; image_row_num < min_energy_results.size(); image_row_num++) {
+        auto x = min_energy_results.at(image_row_num);
+        int phase = x.first;
+        double period = x.second;
+        int period_idx = -1;
+
+        while(period != row_detector.m_periods[++period_idx]);
+
+		int target_phase = (int) CRD.m_c[image_row_num];
+		int target_period_idx = (int) CRD.m_id[image_row_num];
+
+        int phase_error = target_phase - phase;
+        int period_idx_error = target_period_idx - period_idx;
+        // auto distance = std::sqrt(std::pow(phase_error, 2) + std::pow(period_idx_error, 2));
+        auto distance = std::abs(phase_error) + std::abs(period_idx_error);
+        total_err += distance;
+
+        // std::cout << "row: " << image_row_num
+        //           << " phase err: " << phase_error
+        //           << " period err: " << period_idx_error
+        //           << " err: " << distance
+        //           << std::endl;
+	}
+    std::cout << "avg err:" << total_err / min_energy_results.size() << std::endl;
+}
+
+void setup_crds(char **argv, int argc, crd_cpp::CropRowDetector &row_detector) {
+
+    //---------- CROP ROW DETECTION ORIGINAL SETUP ----------
     ros::init(argc, argv, "crop_row_detector");
-
     ros::NodeHandle nh;
-
     ros::Subscriber img_sub = nh.subscribe<sensor_msgs::Image>("/camera/image_raw", 1, image_cb);
 
-    string cfg_filename = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_original/cfg/params.cfg";
-
+    std::string cfg_filename = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_original/cfg/params.cfg";
     cfg_filename = nh.param("cfg_filename", cfg_filename);
 
-    cout << cfg_filename << endl;
+    std::cout << cfg_filename << std::endl;
 
     if (cfg_filename.length() < 1) {
-        cout << "Usage: _cfg_filename:=/..." << endl;
+        std::cout << "Usage: _cfg_filename:=/..." << std::endl;
         ROS_INFO("Config file does not exist!");
-        return 0;
+        exit(1);
     }
-    cout << "initingDetector .." << std::endl;
+    std::cout << "initingDetector .." << std::endl;
     initDetector(cfg_filename);
 
-    string image_path = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/download.jpg";
-    string image_path_cpp = "/home/noflip/catkin_ws/src/crop_row_detection/crop_row_detection_cpp/Images/";
-    cout << "loading image..";
-    cv::Mat im = imread(image_path);
-    cout << "resizing.." << endl;
-    resize(im, im, Size(w, h));
+    //---------- CROP ROW DETECTION CPP SETUP ----------
+    cv::Size image_size = cv::Size(400, 300);
 
+    std::cout << "loading" << std::endl;
+    row_detector.load(image_size);
+    std::cout << "loaded" << std::endl;
+}
+
+int main(int argc, char **argv) {
+    crd_cpp::CropRowDetector row_detector = crd_cpp::CropRowDetector();
+    setup_crds(argv, argc, row_detector);
+    crd_cpp::ImagePreprocessor preprocessor = crd_cpp::ImagePreprocessor(cv::Size(400, 300));
+    std::cout << "preprocessor initd";
+
+    std::string image_path = "/home/noflip/catkin_ws/src/crop_row_detection/score_results/Images/crop_row_037.JPG";
+
+
+    // original imge preprocessing
+    std::cout << "loading image..";
+    cv::Mat im = cv::imread(image_path);
+    std::cout << "resizing.." << std::endl;
+    cv::resize(im, im, cv::Size(w, h));
     IplImage *pInputImage = new IplImage(im);
     IplImage *ExGImage;
     IplImage *pDisplay = cvCreateImage(cvSize(w, h), IPL_DEPTH_8U, 3);
-
-    cout << "creating ExG.." << endl;
+    std::cout << "creating ExG.." << std::endl;
     ExGImage = cvCreateImage(cvSize(w, h), 8, 1);
 
-    //---------- CROP ROW DETECTION CPP SETUP ----------
-    cout << "CPP setup" << endl;
-    std::map<std::string, double> settings; // setup();
-    settings["a0"] = 1.28;
-    settings["b0"] = 4.48;
-    settings["width"] = 400;
-    settings["height"] = 300;
-    cv::Size image_size = cv::Size((uint) settings["width"], (uint) settings["height"]);
-    crd_cpp::ImagePreprocessor preprocessor(image_path_cpp, image_size);
-    crd_cpp::CropRowDetector row_detector = crd_cpp::CropRowDetector();
+    // cpp image processing
+    cv::Mat intensityImage = preprocessor.process(image_path);
 
-    std::vector<std::vector<std::vector<crd_cpp::energy_type>>> energy_map;
-    std::vector<cv::Mat> images = preprocessor.process();
-    cv::Mat &pIntensityImg = images.at(0);
 
-    std::cout << "loading" << std::endl;
-    row_detector.load(pIntensityImg);
+    clock_t start;
 
-    std::clock_t start;
-
-    std::cout << "loaded" << std::endl;
+    // templte matching for cpp
     start = std::clock();
+    row_detector.template_matching(intensityImage);
+    std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-    row_detector.template_matching();
-    std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms"
-              << std::endl;
-    std::cout << "plotting" << std::endl;
-    for(int i=0; i<10; i++)
-        std::cout << "xcorr " << row_detector.m_best_energy_by_row.at(i) << std::endl;
-
+    // optimization for cpp
+    start = std::clock();
     std::cout << "optimization:" << std::endl;
-    start = std::clock();
     auto min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
     std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-    CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width, pInputImage->height);
-
-    std::cout << "teardown" << std::endl;
-    row_detector.teardown();
-
+    // show results for CPP
     std::cout << "plotting" << std::endl;
-    if(argc > 1)
-        crd_cpp::plot_template_matching(pIntensityImg, min_energy_results);
+    // dump cpp results
+    crd_cpp::dump_template_matching(min_energy_results, row_detector.m_image_width, "cpp");
 
+    if(argc > 1)
+        crd_cpp::plot_template_matching(intensityImage, min_energy_results);
+
+
+    // preprocess original
+    CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width, pInputImage->height);
     cvShowImage("Crop Rows BGR", ExGImage);
     cvSaveImage("ExG.png", ExGImage);
 
     //Apply crop row detection method
-    std::cout << "START" << std::endl;
+    std::cout << "Start Apply" << std::endl;
     start = std::clock();
     CRD.Apply((unsigned char *) ExGImage->imageData, w, 0);
     std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-//   cvCvtColor(pInputImage, pDisplay, CV_GRAY2RGB);
-    cvCopy(pInputImage, pDisplay);
+    // dump original results
+    std::vector<crd_cpp::old_tuple_type> crd_original(min_energy_results.size());
+    for (uint image_row_num = 0; image_row_num < min_energy_results.size(); image_row_num++)
+        crd_original.at(image_row_num) = crd_cpp::old_tuple_type(CRD.m_c[image_row_num], CRD.m_d[image_row_num]);
+    crd_cpp::dump_template_matching(crd_original, row_detector.m_image_width, "original");
 
+
+    // show original results
+    //   cvCvtColor(pInputImage, pDisplay, CV_GRAY2RGB);
+    cvCopy(pInputImage, pDisplay);
     CRD.Display((unsigned char *) (pDisplay->imageData), w);
     cvShowImage("Crop Rows BGR", pDisplay);
-
     cvWaitKey(0);
 
+    // compare scores
+    std::cout << "checking template matching" << std::endl;
+    score_xcorr(row_detector, min_energy_results);
+    score_optimization(row_detector, min_energy_results);
+
+    // teardown cpp
+    std::cout << "teardown" << std::endl;
+    row_detector.teardown();
 
     // while (ros::ok())
     //     ros::spinOnce();

@@ -124,6 +124,10 @@ void CRVLCropRowDetector::Init(int h)
 void CRVLCropRowDetector::Apply(unsigned char * I,
 								int w, int imNum)
 {
+
+    // for(int u = 0; u < 10; u++){
+    //     std::cout << "orig::I " << (double) I[u] << std::endl;
+    // }
     startTotal = clock();
 	double fa0 = (double)m_a0;
 	double fb0 = (double)m_b0;
@@ -181,16 +185,14 @@ void CRVLCropRowDetector::Apply(unsigned char * I,
 	
 	//int debugCounter = 0;
 
+
 	for(v = 0; v < m_h; v++, I_ += w, DP_ += n)
 	{
 		// integral image of the row
-
 		II[0] = (int)(I_[0]);
 
 		for(u = 1; u < w; u++)
 			II[u] = II[u - 1] + I_[u];
-
-
 
 
 		// convolutions
