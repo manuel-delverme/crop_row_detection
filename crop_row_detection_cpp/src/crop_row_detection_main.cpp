@@ -15,6 +15,40 @@ namespace crd_cpp {
         cv::destroyWindow("Display Image");
     }
 
+    void dump_template_matching(std::vector<old_tuple_type> &match_results, int image_width, std::string prefix) {
+        old_tuple_type x;
+        std::cout << "dumping " << match_results.size() << " results" << std::endl;
+
+        std::ofstream csv_stream("/tmp/match_results" + prefix + ".csv");
+
+        period_type center_crop;
+        period_type left_crop;
+        period_type right_crop;
+        for (size_t image_row_num = 0; image_row_num < match_results.size(); image_row_num++) {
+            x = match_results.at(image_row_num);
+            phase_type phase = x.first;
+            period_type period = x.second;
+
+            period_type center_of_image = (period_type) std::round(image_width / 2);
+
+            center_crop = center_of_image + (period_type) phase;
+            left_crop = center_crop - period;
+            right_crop = center_crop + period;
+
+            std::cout
+                    << image_row_num << ", "
+                    << left_crop << ", "
+                    << center_crop << ", "
+                    << right_crop << std::endl;
+            csv_stream
+                    << left_crop << ", "
+                    << center_crop << ", "
+                    << right_crop << std::endl;
+
+        }
+        csv_stream.close();
+    }
+
     void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<old_tuple_type> &match_results) {
         cv::Mat temp_image;
         cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);

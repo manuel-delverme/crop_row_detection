@@ -61,22 +61,22 @@ namespace crd_cpp {
 
     std::vector<cv::Mat> ImagePreprocessor::process() {
         std::vector<cv::Mat> images;
-        cv::String path(m_images_folder + "*.jpg");
+        cv::String path(m_images_folder + "*");
         std::vector<cv::String> file_names;
         cv::glob(path, file_names, true); // recurse
 
         for (std::string file_path : file_names) {
             cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
-        // if (im.empty()) continue; //only proceed if
+            // if (im.empty()) continue; //only proceed if
             cv::Mat resized_image;
-        cv::resize(image, resized_image, cv::Size(400,300));//m_size); // settings["image_size"]);
+            cv::resize(image, resized_image, cv::Size(400, 300));//m_size); // settings["image_size"]);
 
             cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
 
             cv::Mat down_ExG_;
             down_ExG_ = cv::Mat::zeros(cv::Size(intensity.cols / 2, intensity.rows / 2), intensity.type());
 
-	//std::cout << intensity.size() << " " << down_ExG_.size() << std::endl;
+            //std::cout << intensity.size() << " " << down_ExG_.size() << std::endl;
 
             // Downsampling ottimo
             for (int row = 0; row < intensity.rows / 2; row++) {
@@ -94,18 +94,7 @@ namespace crd_cpp {
                 }
 
             }
-
-	  /*cv::Mat temp;
-	  cv::resize(intensity, temp, cv::Size( intensity.cols/2, intensity.rows/2));
-
-	  cv::imshow(" exg",intensity);
-	  cv::imshow("downsampled exg",down_ExG_-temp);
-	  //cv::imshow("downsampled normal", temp);
-	  cv::waitKey(0);*/
-
-	  images.push_back(intensity);
-	  //images.push_back(down_ExG_);
-
+            images.push_back(intensity);
         }
         return images;
     }

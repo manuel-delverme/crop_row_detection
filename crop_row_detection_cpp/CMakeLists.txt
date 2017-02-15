@@ -62,7 +62,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
 
 find_package(OpenCV REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
-        crop_row_detection_cpp
         roscpp
         rospy
         std_msgs
