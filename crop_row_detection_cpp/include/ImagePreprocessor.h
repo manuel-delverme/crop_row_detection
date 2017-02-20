@@ -1,5 +1,3 @@
-#include <crop_row_detection.h>
-
 #ifndef NEW_CROP_ROW_DETECTION_IMAGEPREPROCESSOR_H
 #define NEW_CROP_ROW_DETECTION_IMAGEPREPROCESSOR_H
 

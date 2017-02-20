@@ -12,7 +12,6 @@ namespace crd_cpp {
     ImagePreprocessor::ImagePreprocessor(cv::Size target_size) {
         m_image_size = target_size;
     }
-
     cv::Mat ImagePreprocessor::convertToExG(cv::Mat &image) {
 
         cv::Mat intensity = cv::Mat::zeros(image.size(), CV_8UC1);
@@ -57,7 +56,6 @@ namespace crd_cpp {
 
         return intensity;
     }
-
     cv::Mat ImagePreprocessor::process(std::string image_path) {
         cv::Mat image = cv::imread(image_path, CV_LOAD_IMAGE_COLOR);
         cv::Mat resized_image;

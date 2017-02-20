@@ -5,14 +5,65 @@
 #include <iostream>
 #include <fstream>
 #include <opencv2/opencv.hpp>
-#include <unordered_map>
-
+#include <ceres/ceres.h>
 #include "CropRowDetector.h"
 
 // MACRO per fixing del biased rounding
 #define DOUBLE2INT(x)    (int)floor(x + 0.5)
 
 namespace crd_cpp {
+    struct GT_Residual {
+        GT_Residual(double x, double y, double x0, double frequency_factor)
+                : x_(x), y_(y), x0_(x0), frequency_factor_(frequency_factor) {}
+
+        template<typename T>
+        bool operator()(const T *p, const T *pf, const T *f, T *residual) const {
+
+            //funzione residuo da minimizzare
+            residual[0] = T(y_) - ((pf[1] + T(x0_) * pf[0]) * p[0] * pow(T(x_), 4) +
+                                   (pf[3] + T(x0_) * pf[2]) * p[1] * pow(T(x_), 3) +
+                                   (pf[5] + T(x0_) * pf[4]) * p[2] * pow(T(x_), 2) +
+                                   (pf[7] + T(x0_) * pf[6]) * p[3] * pow(T(x_), 1) +
+                                   p[4] + T(frequency_factor_) * f[0]);
+            return true;
+        }
+        // Factory to hide the construction of the CostFunction object from
+        // the client code.
+        static ceres::CostFunction* Create(double x,
+                                           double y,
+                                           double x0,
+                                           double frequency_factor) {
+            return (new ceres::AutoDiffCostFunction<GT_Residual, 1,5,8,1>(
+                    new GT_Residual(x, y, x0, frequency_factor)));
+        }
+        double x_;
+        double y_;
+        double x0_;
+        double frequency_factor_;
+    };
+    class CropRowCostFunctor {
+    public:
+        CropRowCostFunctor(const cv::Mat& image, int poly_idx) : image_(image), poly_idx_(poly_idx){}
+
+        bool operator()(const double poly_coeffs[8], const double prespective_coeff[5],
+                       const double* poly_period, double *residuals) const {
+            uint sum = 0;
+            for (uint row_num = 0; row_num < image_.rows; row_num++) {
+                for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
+                    sum += Polyfit::eval_poly(row_num, poly_idx, poly_coeffs, prespective_coeff, poly_period);
+                }
+            }
+            residuals[0] = sum;
+            return true;
+        }
+
+        static ceres::CostFunction* Create(const cv::Mat image, int poly_idx) {
+            return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(new CropRowCostFunctor(image, poly_idx));
+        }
+    private:
+        int poly_idx_;
+        cv::Mat image_;
+    };
     CropRowDetector::CropRowDetector() {}
 
     void CropRowDetector::load(cv::Size image_size) {
@@ -494,7 +545,6 @@ namespace crd_cpp {
         }
         return m_best_nodes;
     }
-
     void CropRowDetector::teardown() {
         delete[] m_dataset_ptr;
         delete[] m_parabola_center;
@@ -502,4 +552,231 @@ namespace crd_cpp {
         delete[] m_periods;
     }
 
+    Polyfit::Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth) {
+        int crop_row_center;
+        double crop_row_period;
+
+        m_options.max_num_iterations = 50;
+        m_options.linear_solver_type = ceres::DENSE_QR;
+        m_options.minimizer_progress_to_stdout = false;
+
+        int image_center = image.cols / 2;
+        int image_height = image.rows;
+
+        int poly_origin_center = image_center + ground_truth.at(0).first;
+        double poly_origin_period = ground_truth.at(0).second;
+
+        int poly_idx;
+        ceres::CostFunction *cost_function;
+
+        for (uint row_num = 0; row_num < image_height; row_num++) {
+            crop_row_center = image_center + ground_truth.at(row_num).first;
+            crop_row_period = ground_truth.at(row_num).second;
+            for(poly_idx = -1; poly_idx < 2; poly_idx++){
+                // cost_function = new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(new CropRowCostFunctor(image, poly_idx));
+                // m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+                cost_function = GT_Residual::Create(row_num,
+                                                    crop_row_center + poly_idx * crop_row_period,
+                                                    poly_origin_center + poly_idx * poly_origin_period,
+                                                    poly_idx);
+                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+            }
+        }
+
+        ceres::Solve(m_options, &m_problem, &m_summary);
+
+
+        std::cout << m_polynomial[0] << " " << m_polynomial[1] << " " << m_polynomial[2] << " " << m_polynomial[3] << " " <<
+                  m_polynomial[4] << " " << m_poly_period << '\n';
+
+        std::cout << m_perspective_factors[0] << " " << m_perspective_factors[1] << " " << m_perspective_factors[2] << " "
+                  << m_perspective_factors[3] << " " <<
+                  m_perspective_factors[4] << " " << m_perspective_factors[5] << " " << m_perspective_factors[6] << " "
+                  << m_perspective_factors[7] << '\n';
+
+        plot_polys(image, m_polynomial, m_perspective_factors, m_poly_period, image, poly_origin_center, poly_origin_period);
+
+        cv::Size ksize = cv::Size(31, 3);
+        double sigmaX = 20;
+        std::cout << "blurring map" << std::endl;
+        cv::imshow("pre blur", intensity_map);
+        cv::waitKey(0);
+        cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
+        // cv::blur(intensity_map, intensity_map, ksize);
+
+        m_image = image;
+        cv::imshow("post blur", intensity_map * 2);
+        cv::waitKey(0);
+        m_intensity_map = intensity_map;
+    }
+    void Polyfit::plot_polys(const cv::Mat &inpImg_, const double *polynomial, const double *perspective_factors,
+                             double poly_period, const cv::Mat &drawImg_, int poly_origin_center, double poly_origin_period) {
+        int poly_idx = 0;
+        double x0 = poly_origin_center + poly_idx * poly_origin_period;
+
+        poly_idx = 1;
+        double x0_right = poly_origin_center + poly_idx * poly_origin_period;
+
+        poly_idx = 2;
+        double x0_2right = poly_origin_center + poly_idx * poly_origin_period;
+
+        poly_idx = 3;
+        double x0_3right = poly_origin_center + poly_idx * poly_origin_period;
+
+        poly_idx = -1;
+        double x0_left = poly_origin_center + poly_idx * poly_origin_period;
+
+        poly_idx = -2;
+        double x0_2left = poly_origin_center + poly_idx * poly_origin_period;
+
+        for (uint image_row_num = 0; image_row_num < inpImg_.rows; image_row_num++) {
+            draw_crop(polynomial, perspective_factors, drawImg_, x0, image_row_num);
+            circle(drawImg_, cv::Point2f(
+                    ((perspective_factors[1] + x0_right * perspective_factors[0]) * polynomial[0] *
+                     pow(image_row_num, 4) +
+                     (perspective_factors[3] + x0_right * perspective_factors[2]) * polynomial[1] *
+                     pow(image_row_num, 3) +
+                     (perspective_factors[5] + x0_right * perspective_factors[4]) * polynomial[2] *
+                     pow(image_row_num, 2) +
+                     (perspective_factors[7] + x0_right * perspective_factors[6]) * polynomial[3] * image_row_num +
+                     polynomial[4] + poly_period), image_row_num), 2, cv::Scalar(0, 255, 0), 2);
+            circle(drawImg_, cv::Point2f(
+                    ((perspective_factors[1] + x0_left * perspective_factors[0]) * polynomial[0] *
+                     pow(image_row_num, 4) +
+                     (perspective_factors[3] + x0_left * perspective_factors[2]) * polynomial[1] *
+                     pow(image_row_num, 3) +
+                     (perspective_factors[5] + x0_left * perspective_factors[4]) * polynomial[2] *
+                     pow(image_row_num, 2) +
+                     (perspective_factors[7] + x0_left * perspective_factors[6]) * polynomial[3] * image_row_num +
+                     polynomial[4] - poly_period), image_row_num), 2, cv::Scalar(0, 255, 0), 2);
+            circle(drawImg_, cv::Point2f(
+                    ((perspective_factors[1] + x0_2right * perspective_factors[0]) * polynomial[0] *
+                     pow(image_row_num, 4) +
+                     (perspective_factors[3] + x0_2right * perspective_factors[2]) * polynomial[1] *
+                     pow(image_row_num, 3) +
+                     (perspective_factors[5] + x0_2right * perspective_factors[4]) * polynomial[2] *
+                     pow(image_row_num, 2) +
+                     (perspective_factors[7] + x0_2right * perspective_factors[6]) * polynomial[3] * image_row_num +
+                     polynomial[4] + 2 * poly_period), image_row_num), 2, cv::Scalar(255, 0, 0), 2);
+            circle(drawImg_, cv::Point2f(
+                    ((perspective_factors[1] + x0_2left * perspective_factors[0]) * polynomial[0] *
+                     pow(image_row_num, 4) +
+                     (perspective_factors[3] + x0_2left * perspective_factors[2]) * polynomial[1] *
+                     pow(image_row_num, 3) +
+                     (perspective_factors[5] + x0_2left * perspective_factors[4]) * polynomial[2] *
+                     pow(image_row_num, 2) +
+                     (perspective_factors[7] + x0_2left * perspective_factors[6]) * polynomial[3] * image_row_num +
+                     polynomial[4] - 2 * poly_period), image_row_num), 2, cv::Scalar(255, 0, 0), 2);
+            circle(drawImg_, cv::Point2f(
+                    ((perspective_factors[1] + x0_3right * perspective_factors[0]) * polynomial[0] *
+                     pow(image_row_num, 4) +
+                     (perspective_factors[3] + x0_3right * perspective_factors[2]) * polynomial[1] *
+                     pow(image_row_num, 3) +
+                     (perspective_factors[5] + x0_3right * perspective_factors[4]) * polynomial[2] *
+                     pow(image_row_num, 2) +
+                     (perspective_factors[7] + x0_3right * perspective_factors[6]) * polynomial[3] * image_row_num +
+                     polynomial[4] + 3 * poly_period), image_row_num), 2, cv::Scalar(255, 0, 0), 2);
+        }
+        imshow("drawImg_", drawImg_);
+        //     cv::imwrite("/home/temistocle/Scrivania/ciao.jpg", drawImg_);
+        cv::waitKey(0);
+    }
+    void Polyfit::plot_fitted_polys() {
+        cv::Mat img = m_image.clone();
+        cv::Scalar_<double> color;
+
+        for (uint image_row_num = 0; image_row_num < m_image.rows; image_row_num++) {
+            for(int poly_idx = -2; poly_idx < 4; poly_idx++){
+                int column = eval_poly(image_row_num, poly_idx);
+
+                if(std::abs(poly_idx) < 2)
+                    color = cv::Scalar(0, 0, 255);
+                else
+                    color = cv::Scalar(127, 127, 127);
+
+                cv::circle(img, cv::Point2f(column, image_row_num), 2, color, 1);
+            }
+        }
+        cv::imshow("poly_fitted", img);
+        cv::waitKey(0);
+    }
+
+    const int Polyfit::eval_poly(uint image_row_num, int poly_idx, const double m_polynomial[5],
+                                 const double m_perspective_factors[8], const double* m_poly_period)
+    {
+        int column;
+        double poly_origin = m_polynomial[4] + *(m_poly_period) * poly_idx;
+        column = (int) ((m_perspective_factors[1] + poly_origin * m_perspective_factors[0]) * m_polynomial[0] * pow(image_row_num, 4)
+                        + (m_perspective_factors[3] + poly_origin * m_perspective_factors[2]) * m_polynomial[1] * pow(image_row_num, 3)
+                        + (m_perspective_factors[5] + poly_origin * m_perspective_factors[4]) * m_polynomial[2] * pow(image_row_num, 2)
+                        + (m_perspective_factors[7] + poly_origin * m_perspective_factors[6]) * m_polynomial[3] * image_row_num
+                        + m_polynomial[4]
+                        + poly_idx * *(m_poly_period));
+
+        return column;
+    }
+    int Polyfit::eval_poly(uint image_row_num, int poly_idx){
+        int column;
+        double poly_origin = m_polynomial[4] + m_poly_period * poly_idx;
+        column = (int) ((m_perspective_factors[1] + poly_origin * m_perspective_factors[0]) * m_polynomial[0] * pow(image_row_num, 4)
+                        + (m_perspective_factors[3] + poly_origin * m_perspective_factors[2]) * m_polynomial[1] * pow(image_row_num, 3)
+                        + (m_perspective_factors[5] + poly_origin * m_perspective_factors[4]) * m_polynomial[2] * pow(image_row_num, 2)
+                        + (m_perspective_factors[7] + poly_origin * m_perspective_factors[6]) * m_polynomial[3] * image_row_num
+                        + m_polynomial[4]
+                        + poly_idx * m_poly_period);
+
+        return column;
+    }
+    void Polyfit::draw_crop(const double *polynomial, const double *perspective_factors, const cv::Mat &drawImg_, double x0, uint image_row_num) {
+        auto x = (perspective_factors[1] + x0 * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4) +
+                 (perspective_factors[3] + x0 * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3) +
+                 (perspective_factors[5] + x0 * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2) +
+                 (perspective_factors[7] + x0 * perspective_factors[6]) * polynomial[3] * image_row_num + polynomial[4];
+
+        auto point = cv::Point2f((float) x, image_row_num);
+        circle(drawImg_, point, 2, cv::Scalar(0, 255, 0), 2);
+    }
+    void Polyfit::add_noise() {
+        std::default_random_engine generator;
+
+        double fract = 10 * 2;
+        double mean;
+        double sigma;
+        plot_fitted_polys();
+        for (uint i = 1; i < 5; i++) {
+            mean = m_polynomial[i];
+            sigma = mean / fract;
+            std::normal_distribution<double> distribution(mean, sigma);
+            auto val = distribution(generator);
+            std::cout << mean << ": " << val << std::endl;
+            m_polynomial[i] = val;
+        }
+        {
+            mean = m_polynomial[0];
+            sigma = mean / (fract * 10);
+            std::normal_distribution<double> distribution(mean, sigma);
+            auto val = distribution(generator);
+            std::cout << mean << ": " << val << std::endl;
+            m_polynomial[0] = val;
+        }
+
+        for(uint i = 0; i < 8; i++){
+            mean = m_perspective_factors[i];
+            sigma = mean / fract;
+            std::normal_distribution<double> distribution(mean, sigma);
+            auto val = distribution(generator);
+            std::cout << mean << ": " << val << std::endl;
+            m_perspective_factors[i] = val;
+        }
+        {
+            mean = m_poly_period;
+            sigma = mean / fract * 10;
+            std::normal_distribution<double> distribution(mean, sigma);
+            auto val = distribution(generator);
+            m_poly_period = val;
+        }
+        plot_fitted_polys();
+    }
+    void Polyfit::fit(){
+    }
 }

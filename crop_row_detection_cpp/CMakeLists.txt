@@ -31,11 +31,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
     -pipe \
     -march=native")
 
-find_package(OpenCV REQUIRED)
-find_package(Ceres REQUIRED)
-find_package(cmake_modules REQUIRED)
-find_package(Eigen REQUIRED)
-
 find_package(catkin REQUIRED COMPONENTS
         roscpp
         rospy
@@ -44,15 +39,29 @@ find_package(catkin REQUIRED COMPONENTS
         sensor_msgs
         tf
         cv_bridge
-        )
+)
+
+find_package(OpenCV REQUIRED)
+find_package(Ceres REQUIRED)
+
 catkin_package(INCLUDE_DIRS include)
+
 include_directories(
-        src
         include/
         ${catkin_INCLUDE_DIRS}
-        ${Eigen_INCLUDE_DIRS}
+        ${CERES_INCLUDE_DIRS}
+        # ${Eigen_INCLUDE_DIRS}
         ${OpenCV_INCLUDE_DIR}
+)
+
+add_library(crop_row_detection_cpp_detector
+        src/crop_row_detection_main.cpp
+        src/CropRowDetector.cpp
+        src/ImagePreprocessor.cpp
         )
 
-add_library(crop_row_detection_cpp_detector src/crop_row_detection_main.cpp src/CropRowDetector.cpp src/ImagePreprocessor.cpp)
-target_link_libraries(crop_row_detection_cpp_detector ${OpenCV_LIBS} ${catkin_LIBRARIES} )
+target_link_libraries(crop_row_detection_cpp_detector
+        ${OpenCV_LIBS}
+        ${catkin_LIBRARIES}
+        ${CERES_LIBRARIES}
+        )
