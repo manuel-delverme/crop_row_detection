@@ -1,4 +1,6 @@
 build/
 tags
-Images/
+all_images/
 playground/
+cmake-build-*/
+.idea/
