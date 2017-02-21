@@ -1,17 +1,13 @@
 #include <opencv2/opencv.hpp>
 #include <fstream>
 #include <ctime>
-#include "ImagePreprocessor.h"
+#include "crop_row_detection.h"
 
 namespace crd_cpp {
-#define DEBUG 0
-
     void display_img(cv::Mat image) {
         cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
         cv::imshow("Display Image", image);
         cv::waitKey(0);
-
-        // close the window
         cv::destroyWindow("Display Image");
     }
 
@@ -35,15 +31,19 @@ namespace crd_cpp {
             left_crop = center_crop - period;
             right_crop = center_crop + period;
 
-            std::cout
-                    << image_row_num << ", "
-                    << left_crop << ", "
-                    << center_crop << ", "
-                    << right_crop << std::endl;
+            // std::cout
+            //         << image_row_num << ", "
+            //         << left_crop << ", "
+            //         << center_crop << ", "
+            //         << right_crop << std::endl;
+            // csv_stream
+            //         << left_crop << ", "
+            //         << center_crop << ", "
+            //         << right_crop << std::endl;
             csv_stream
-                    << left_crop << ", "
-                    << center_crop << ", "
-                    << right_crop << std::endl;
+                    << image_row_num << " "
+                    << phase << " "
+                    << period << std::endl;
 
         }
         csv_stream.close();
@@ -114,39 +114,34 @@ namespace crd_cpp {
     }
 
     int main_old(int argc, char **argv) {
-        if (argc != 2) {
-            return -1;
-        }
-        std::map<std::string, double> settings; // setup();
-        settings["a0"] = 1.28;
-        settings["b0"] = 4.48;
-        settings["width"] = 400;
-        settings["height"] = 300;
-        // settings["d_min"] = 8;
-        // settings["n_samples_per_octave"] = 70;
-        // settings["n_octaves"] = 5;
+        // if (argc != 2) {
+        //     return -1;
+        // }
+        // std::map<std::string, double> settings; // setup();
+        // settings["a0"] = 1.28;
+        // settings["b0"] = 4.48;
+        // settings["width"] = 400;
+        // settings["m_top_image_col"] = 300;
+        // // settings["d_min"] = 8;
+        // // settings["n_samples_per_octave"] = 70;
+        // // settings["n_octaves"] = 5;
 
-        cv::Size image_size = cv::Size((uint) settings["width"], (uint) settings["height"]);
-        ImagePreprocessor preprocessor(argv[1], image_size);
+        // cv::Size image_size = cv::Size((uint) settings["width"], (uint) settings["m_top_image_col"]);
+        // ImagePreprocessor preprocessor(argv[1], image_size);
 
-        CropRowDetector row_detector = CropRowDetector();
-        std::vector<std::vector<std::vector<energy_type>>> energy_map;
+        // CropRowDetector row_detector = CropRowDetector();
 
-        // std::vector<std::map<old_tuple_type, double>> energy_map((size_t) image_size.height);
-        std::vector<cv::Mat> images = preprocessor.process();
+        // cv::Mat intensityImg = preprocessor.process("path/to/img");
 
-        for (cv::Mat &pIntensityImg : images) {
+        // row_detector.load(image_size);
+        // row_detector.template_matching(intensityImg);
+        // std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
 
-            row_detector.load(pIntensityImg);
-            row_detector.template_matching();
-            std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
+        // plot_template_matching(intensityImg, min_energy_results);
 
-            plot_template_matching(pIntensityImg, min_energy_results);
+        // row_detector.teardown();
 
-        }
-        row_detector.teardown();
-
-        std::cout << "done" << std::endl;
+        // std::cout << "done" << std::endl;
         return 0;
     }
 }

@@ -13,6 +13,8 @@
 #include <crop_row_detection.h>
 #include <ImagePreprocessor.h>
 
+#include <ceres/ceres.h>
+
 CRVLCropRowDetector CRD;
 CRVLVisionSystem VS;
 int w, h;
@@ -152,8 +154,9 @@ void setup_crds(char **argv, int argc, crd_cpp::CropRowDetector &row_detector) {
         ROS_INFO("Config file does not exist!");
         exit(1);
     }
-    std::cout << "initingDetector .." << std::endl;
+    std::cout << "initingDetector ..";
     initDetector(cfg_filename);
+    std::cout << "done" << std::endl;
 
     //---------- CROP ROW DETECTION CPP SETUP ----------
     cv::Size image_size = cv::Size(400, 300);
@@ -164,84 +167,99 @@ void setup_crds(char **argv, int argc, crd_cpp::CropRowDetector &row_detector) {
 }
 
 int main(int argc, char **argv) {
+    const bool USE_CPP = false;
+
     crd_cpp::CropRowDetector row_detector = crd_cpp::CropRowDetector();
+    clock_t start;
+    std::vector<crd_cpp::old_tuple_type> min_energy_results;
+
     setup_crds(argv, argc, row_detector);
+
     crd_cpp::ImagePreprocessor preprocessor = crd_cpp::ImagePreprocessor(cv::Size(400, 300));
     std::cout << "preprocessor initd";
 
-    std::string image_path = "/home/noflip/catkin_ws/src/crop_row_detection/score_results/Images/crop_row_037.JPG";
+    std::string video_file = "/home/noflip/catkin_ws/src/crop_row_detection/score_results/Sugarbeets_Field.mp4";
+    cv::VideoCapture capture(video_file);
+    cv::Mat video_image;
+    while(capture.isOpened()){
+        capture >> video_image;
+        // cpp image processing
+        cv::Mat intensityImage = preprocessor.process(video_image);
+        if(USE_CPP){
+            // templte matching for cpp
+            start = std::clock();
+            row_detector.template_matching(intensityImage);
+            std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+
+            // optimization for cpp
+            start = std::clock();
+            std::cout << "optimization:" << std::endl;
+            min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
+            std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+
+            // show results for CPP
+            std::cout << "plotting" << std::endl;
+            // dump cpp results
+            crd_cpp::dump_template_matching(min_energy_results, row_detector.m_image_width, "cpp");
+
+            if(argc > 1)
+                crd_cpp::plot_template_matching(intensityImage, min_energy_results);
+        }
+
+        // original imge preprocessing
+        std::cout << "resizing.." << std::endl;
+        cv::resize(video_image, video_image, cv::Size(w, h));
+        IplImage *pInputImage = new IplImage(video_image);
+        IplImage *ExGImage;
+        IplImage *pDisplay = cvCreateImage(cvSize(w, h), IPL_DEPTH_8U, 3);
+        std::cout << "creating ExG.." << std::endl;
+        ExGImage = cvCreateImage(cvSize(w, h), 8, 1);
 
 
-    // original imge preprocessing
-    std::cout << "loading image..";
-    cv::Mat im = cv::imread(image_path);
-    std::cout << "resizing.." << std::endl;
-    cv::resize(im, im, cv::Size(w, h));
-    IplImage *pInputImage = new IplImage(im);
-    IplImage *ExGImage;
-    IplImage *pDisplay = cvCreateImage(cvSize(w, h), IPL_DEPTH_8U, 3);
-    std::cout << "creating ExG.." << std::endl;
-    ExGImage = cvCreateImage(cvSize(w, h), 8, 1);
+        // preprocess original
+        CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width, pInputImage->height);
+        cvShowImage("Crop Rows BGR", ExGImage);
+        cvSaveImage("ExG.png", ExGImage);
 
-    // cpp image processing
-    cv::Mat intensityImage = preprocessor.process(image_path);
+        //Apply crop row detection method
+        std::cout << "Start Apply" << std::endl;
+        start = std::clock();
+        CRD.Apply((unsigned char *) ExGImage->imageData, w, 0);
+        std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
+        // dump original results
+        std::vector<crd_cpp::old_tuple_type> crd_original(h);
+        for (uint image_row_num = 0; image_row_num < h; image_row_num++)
+            crd_original.at(image_row_num) = crd_cpp::old_tuple_type(CRD.m_c[image_row_num], CRD.m_d[image_row_num]);
+        crd_cpp::dump_template_matching(crd_original, w, "original");
+        std::cout << ">fitting initial guess" << std::endl;
+        crd_cpp::Polyfit polyfit(video_image, intensityImage, crd_original);
 
-    clock_t start;
+        std::cout << ">adding noise" << std::endl;
+        // polyfit.add_noise();
 
-    // templte matching for cpp
-    start = std::clock();
-    row_detector.template_matching(intensityImage);
-    std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
-
-    // optimization for cpp
-    start = std::clock();
-    std::cout << "optimization:" << std::endl;
-    auto min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
-    std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
-
-    // show results for CPP
-    std::cout << "plotting" << std::endl;
-    // dump cpp results
-    crd_cpp::dump_template_matching(min_energy_results, row_detector.m_image_width, "cpp");
-
-    if(argc > 1)
-        crd_cpp::plot_template_matching(intensityImage, min_energy_results);
-
-
-    // preprocess original
-    CRD.ExGImage((unsigned char *) pInputImage->imageData, (unsigned char *) ExGImage->imageData, pInputImage->width, pInputImage->height);
-    cvShowImage("Crop Rows BGR", ExGImage);
-    cvSaveImage("ExG.png", ExGImage);
-
-    //Apply crop row detection method
-    std::cout << "Start Apply" << std::endl;
-    start = std::clock();
-    CRD.Apply((unsigned char *) ExGImage->imageData, w, 0);
-    std::cout << "apply time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
-
-    // dump original results
-    std::vector<crd_cpp::old_tuple_type> crd_original(min_energy_results.size());
-    for (uint image_row_num = 0; image_row_num < min_energy_results.size(); image_row_num++)
-        crd_original.at(image_row_num) = crd_cpp::old_tuple_type(CRD.m_c[image_row_num], CRD.m_d[image_row_num]);
-    crd_cpp::dump_template_matching(crd_original, row_detector.m_image_width, "original");
+        std::cout << ">refitting" << std::endl;
+        polyfit.fit(video_image);
+    }
 
 
     // show original results
     //   cvCvtColor(pInputImage, pDisplay, CV_GRAY2RGB);
-    cvCopy(pInputImage, pDisplay);
-    CRD.Display((unsigned char *) (pDisplay->imageData), w);
-    cvShowImage("Crop Rows BGR", pDisplay);
-    cvWaitKey(0);
+    // cvCopy(pInputImage, pDisplay);
+    // CRD.Display((unsigned char *) (pDisplay->imageData), w);
+    // cvShowImage("Crop Rows BGR", pDisplay);
+    // cvWaitKey(0);
 
-    // compare scores
-    std::cout << "checking template matching" << std::endl;
-    score_xcorr(row_detector, min_energy_results);
-    score_optimization(row_detector, min_energy_results);
+    if(USE_CPP){
+        // compare scores
+        std::cout << "checking template matching" << std::endl;
+        score_xcorr(row_detector, min_energy_results);
+        score_optimization(row_detector, min_energy_results);
 
-    // teardown cpp
-    std::cout << "teardown" << std::endl;
-    row_detector.teardown();
+        // teardown cpp
+        std::cout << "teardown" << std::endl;
+        row_detector.teardown();
+    }
 
     // while (ros::ok())
     //     ros::spinOnce();

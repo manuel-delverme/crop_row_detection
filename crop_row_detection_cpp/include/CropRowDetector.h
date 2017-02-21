@@ -5,6 +5,8 @@
 #ifndef NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
 #define NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H
 
+#include <ceres/ceres.h>
+
 namespace crd_cpp {
     typedef int phase_type;
     typedef float period_type;
@@ -25,7 +27,7 @@ namespace crd_cpp {
 
         CropRowDetector();
 
-        void load(cv::Mat &intensity_map);
+        void load(cv::Size image_size);
 
         void teardown();
 
@@ -40,7 +42,7 @@ namespace crd_cpp {
                 const std::vector<energy_type> &best_pairs
         );
 
-        void template_matching();
+        void template_matching(cv::Mat intensity_map);
 
         std::vector<std::vector<std::vector<energy_type>>> m_energy_map;
         const period_type m_mind = 8;
@@ -73,6 +75,8 @@ namespace crd_cpp {
             const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period)) - half_band;
             return real_phase;
         };
+        const int m_image_width = 400;
+        const int m_image_height = 300;
 
     private:
         data_type *m_dataset_ptr;
@@ -88,8 +92,6 @@ namespace crd_cpp {
 
         const double m_positive_pulse_width = 1.28; // a0
         const double m_negative_pulse_width = 4.48; // b0
-        const int m_image_width = 400;
-        const int m_image_height = 300;
 
         const float m_f_low = 1.0;
         const energy_type m_maxD = 1.5;
@@ -117,7 +119,38 @@ namespace crd_cpp {
                            energy_type Dnrm, data_type *dataset_row_ptr) const;
 
         inline const period_idx_type period_min(const phase_type phase, const period_type *periods) const;
+    };
 
+    class Polyfit {
+    private:
+
+        void draw_crop(const double *polynomial, const double *perspective_factors, const cv::Mat &drawImg_, double x0,
+                       uint image_row_num);
+
+        void plot_polys(const cv::Mat &inpImg_, const double *polynomial, const double *perspective_factors,
+                        double poly_period, const cv::Mat drawImg_, int poly_origin_center, double poly_origin_period);
+
+        int eval_poly(uint image_row_num, int poly_idx);
+        void plot_fitted_polys(std::string suffix);
+        cv::Mat drawDenseOptFlow(const cv::Mat &flow, const cv::Mat &img, int step, cv::Scalar color, const cv::Mat &mask);
+
+        cv::Mat m_intensity_map;
+        cv::Mat m_image;
+        ceres::Solver::Options m_options;
+        ceres::Problem m_problem;
+        ceres::Solver::Summary m_summary;
+
+        // initial guess
+        double m_polynomial[5] = {0, 0, 0, 0, 0};
+        double m_perspective_factors[8] = {.01, .01, .01, .01, .01, .01, .01, .01};
+        double m_poly_period = 100;
+
+    public:
+        static const int eval_poly(uint image_row_num, int poly_idx, const double m_polynomial[5],
+                                   const double m_perspective_factors[8], const double* m_poly_period);
+        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth);
+        void fit(cv::Mat new_frame);
+        void add_noise();
     };
 }
 #endif //NEW_CROP_ROW_DETECTION_CROPROWDETECTOR_H

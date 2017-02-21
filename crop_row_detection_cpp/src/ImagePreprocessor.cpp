@@ -9,9 +9,8 @@
 #include "ImagePreprocessor.h"
 
 namespace crd_cpp {
-    ImagePreprocessor::ImagePreprocessor(std::string images_path, cv::Size target_size) {
-        m_size = target_size;
-        m_images_folder = images_path;
+    ImagePreprocessor::ImagePreprocessor(cv::Size target_size) {
+        m_image_size = target_size;
     }
 
     cv::Mat ImagePreprocessor::convertToExG(cv::Mat &image) {
@@ -58,19 +57,13 @@ namespace crd_cpp {
 
         return intensity;
     }
-
-    std::vector<cv::Mat> ImagePreprocessor::process() {
-        std::vector<cv::Mat> images;
-        cv::String path(m_images_folder + "*");
-        std::vector<cv::String> file_names;
-        cv::glob(path, file_names, true); // recurse
-
-        for (std::string file_path : file_names) {
-            cv::Mat image = cv::imread(file_path, CV_LOAD_IMAGE_COLOR);
-            // if (im.empty()) continue; //only proceed if
+    cv::Mat ImagePreprocessor::process(std::string image_path) {
+        cv::Mat image = cv::imread(image_path, CV_LOAD_IMAGE_COLOR);
+        return this->process(image);
+    }
+    cv::Mat ImagePreprocessor::process(cv::Mat image) {
             cv::Mat resized_image;
-            cv::resize(image, resized_image, cv::Size(400, 300));//m_size); // settings["image_size"]);
-
+        cv::resize(image, resized_image, m_image_size);
             cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
 
             cv::Mat down_ExG_;
@@ -94,9 +87,7 @@ namespace crd_cpp {
                 }
 
             }
-            images.push_back(intensity);
-        }
-        return images;
+        return intensity;
     }
 }
 

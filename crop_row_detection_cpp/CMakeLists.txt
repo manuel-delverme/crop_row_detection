@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 2.8)
 project(crop_row_detection_cpp)
 
 cmake_policy(SET CMP0015 NEW)
-MESSAGE(STATUS "77777777777777777777====================DDDDDDDDDDDDDDDDDDDD")
+MESSAGE(STATUS "CPP 77777777777777777777====================DDDDDDDDDDDDDDDDDDDD")
 
 set(CMAKE_BUILD_TYPE "Release")
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
@@ -70,13 +70,27 @@ find_package(catkin REQUIRED COMPONENTS
         tf
         cv_bridge
         )
+
+find_package(OpenCV REQUIRED)
+find_package(Ceres REQUIRED)
+
 catkin_package(INCLUDE_DIRS include)
 include_directories(
-        src
         include/
         ${catkin_INCLUDE_DIRS}
+        ${CERES_INCLUDE_DIRS}
+        # ${Eigen_INCLUDE_DIRS}
         ${OpenCV_INCLUDE_DIR}
         )
 
-add_library(crop_row_detection_cpp_detector src/crop_row_detection_main.cpp src/CropRowDetector.cpp src/ImagePreprocessor.cpp)
-target_link_libraries(crop_row_detection_cpp_detector ${OpenCV_LIBS} ${catkin_LIBRARIES} )
+add_library(crop_row_detection_cpp_detector
+        src/crop_row_detection_main.cpp
+        src/CropRowDetector.cpp
+        src/ImagePreprocessor.cpp
+        )
+
+target_link_libraries(crop_row_detection_cpp_detector
+        ${OpenCV_LIBS}
+        ${catkin_LIBRARIES}
+        ${CERES_LIBRARIES}
+        )
