@@ -1,24 +1,18 @@
-//
-// Created by noflip on 21/11/16.
-//
-
 #include <iostream>
 #include <fstream>
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
 #include "CropRowDetector.h"
 
-// MACRO per fixing del biased rounding
-#define DOUBLE2INT(x)    (int)floor(x + 0.5)
+int DISPLAY_FPS = 0; // 1000/60;
 
 namespace crd_cpp {
-    struct GT_Residual {
-        GT_Residual(double x, double y, double x0, double frequency_factor)
+    struct PointResidual {
+        PointResidual(double x, double y, double x0, double frequency_factor)
                 : x_(x), y_(y), x0_(x0), frequency_factor_(frequency_factor) {}
 
         template<typename T>
         bool operator()(const T *p, const T *pf, const T *f, T *residual) const {
-
             //funzione residuo da minimizzare
             residual[0] = T(y_) - ((pf[1] + T(x0_) * pf[0]) * p[0] * pow(T(x_), 4) +
                                    (pf[3] + T(x0_) * pf[2]) * p[1] * pow(T(x_), 3) +
@@ -29,12 +23,9 @@ namespace crd_cpp {
         }
         // Factory to hide the construction of the CostFunction object from
         // the client code.
-        static ceres::CostFunction* Create(double x,
-                                           double y,
-                                           double x0,
-                                           double frequency_factor) {
-            return (new ceres::AutoDiffCostFunction<GT_Residual, 1,5,8,1>(
-                    new GT_Residual(x, y, x0, frequency_factor)));
+        static ceres::CostFunction* Create(double x, double y, double x0, double frequency_factor) {
+            return (new ceres::AutoDiffCostFunction<PointResidual, 1,5,8,1>(
+                    new PointResidual(x, y, x0, frequency_factor)));
         }
         double x_;
         double y_;
@@ -43,28 +34,12 @@ namespace crd_cpp {
     };
     class CropRowCostFunctor {
     public:
-        CropRowCostFunctor(const cv::Mat& image, int poly_idx, uint row_number):
-                image_(image), poly_idx_(poly_idx), row_number_(row_number){}
-
-        bool operator()(const double poly_coeffs[8], const double prespective_coeff[5],
+        bool operator()(const double* poly_coeffs, const double* prespective_coeff,
                         const double* poly_period, double *residuals) const {
             const int column = Polyfit::eval_poly(row_number_, poly_idx_, poly_coeffs, prespective_coeff, poly_period);
             double loss = ((int) image_.at<uchar>(row_number_, column));
             // TODO: saturate
             // TODO: epsilon invariant
-
-            /*
-            int complexity = 0;
-            for (uint idx = 0; idx < 5; idx++){
-                complexity += pow(poly_coeffs[idx], 5 - idx);
-                }
-            for (uint idx = 0; idx < 8; idx++){
-                complexity += pow(prespective_coeff[idx], 8 - idx);
-            }
-            complexity += pow(*(poly_period), 2);
-            double lambda = 0;
-            residuals[0] = loss + lambda * complexity;
-            */
             residuals[0] = loss;
             return true;
         }
@@ -73,6 +48,9 @@ namespace crd_cpp {
             return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(new CropRowCostFunctor(image, poly_idx, row_number));
         }
     private:
+        CropRowCostFunctor(const cv::Mat& image, int poly_idx, uint row_number):
+                image_(image), poly_idx_(poly_idx), row_number_(row_number){}
+
         int poly_idx_;
         uint row_number_;
         cv::Mat image_;
@@ -189,40 +167,6 @@ namespace crd_cpp {
         m_best_energy_by_row.resize(m_image_height);
         // Calcolo quantità necesarrie a CrossCorrelation
     }
-
-    /*
-    void CropRowDetector::calculate_energy_integral(const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
-                                               const std::vector<energy_type> &max_by_row, size_t row_number,
-                                               data_type *dataset_row_ptr) const {
-        energy_type b_val;
-        data_type *dataset_tuple_ptr;
-        data_type *dataset_period_ptr;
-
-        period_idx_type period_idx;
-        phase_type phase;
-
-        energy_type Dnrm = max_by_row[row_number];
-        dataset_period_ptr = dataset_row_ptr;
-
-        for (period_idx = 0; period_idx < this->m_nd; period_idx++, dataset_period_ptr += this->m_nc) {
-            dataset_tuple_ptr = dataset_period_ptr;
-            const period_type period = this->m_periods[period_idx];
-            for (phase = this->m_first_phase; phase < -this->m_first_phase; phase++, dataset_tuple_ptr++) {
-                const phase_type real_phase = this->get_real_phase(phase, period);
-                const energy_type D = energy_map.at(row_number).at(period_idx).at(real_phase - this->m_first_phase);
-
-                if (Dnrm >= 1.0) {
-                    b_val = std::min((energy_type) (1.0 - (D / Dnrm)), this->m_maxD);
-                } else {
-                    b_val = this->m_maxD;
-                }
-                b_val += (dataset_tuple_ptr - this->m_row_size)->tuple_value;
-                dataset_tuple_ptr->tuple_value = b_val;
-            }
-        }
-    }
-     */
-
     void CropRowDetector::template_matching(cv::Mat intensity_map) {
         double energy = 0;
         double best_energy = -1;
@@ -568,9 +512,60 @@ namespace crd_cpp {
     }
 
     Polyfit::Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth) {
-        int crop_row_center;
-        double crop_row_period;
         m_image = image.clone();
+        m_image_center = image.cols / 2;
+        m_image_height = image.rows;
+        m_intensity_map = intensity_map;
+        m_crop_row_points = std::vector<cv::Point2f>((size_t) image.rows * 3);
+
+        fit_poly_on_points(ground_truth);
+        calculate_poly_points(); // not really needded
+
+        cv::Size ksize = cv::Size(0, 0);
+        double sigmaX = 1;
+        std::cout << "blurring map" << std::endl;
+        cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
+        plot_fitted_polys("initial fit");
+        fit_poly_on_image(intensity_map);
+        plot_fitted_polys("imap fit");
+    }
+
+    void Polyfit::fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points) {
+        ceres::Solver::Options m_options;
+        ceres::Problem m_problem;
+        ceres::Solver::Summary m_summary;
+
+        m_options.max_num_iterations = 50;
+        m_options.function_tolerance = 1e-10;
+        m_options.parameter_tolerance = 1e-14;
+        m_options.linear_solver_type = ceres::DENSE_QR;
+        m_options.minimizer_progress_to_stdout = false;
+
+
+        int poly_origin_center = m_image_center + points.at(0).first;
+        period_type poly_origin_period = points.at(0).second;
+        period_type crop_row_center, crop_row_period;
+        int poly_idx;
+        ceres::CostFunction *cost_function;
+
+        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+            crop_row_center = m_image_center + points.at(row_num).first;
+            crop_row_period = points.at(row_num).second;
+            for(poly_idx = -1; poly_idx < 2; poly_idx++){
+                cost_function = PointResidual::Create(row_num,
+                                                    crop_row_center + poly_idx * crop_row_period,
+                                                    poly_origin_center + poly_idx * poly_origin_period,
+                                                    poly_idx);
+                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+            }
+        }
+        ceres::Solve(m_options, &m_problem, &m_summary);
+    }
+
+    void Polyfit::fit_poly_on_image(cv::Mat new_intensity_map) {
+        ceres::Solver::Options m_options;
+        ceres::Problem m_problem;
+        ceres::Solver::Summary m_summary;
 
         m_options.max_num_iterations = 50;
         m_options.function_tolerance = 1e-10;
@@ -578,71 +573,50 @@ namespace crd_cpp {
         m_options.linear_solver_type = ceres::DENSE_QR;
         m_options.minimizer_progress_to_stdout = true;
 
-        int image_center = image.cols / 2;
-        int image_height = image.rows;
-
-        int poly_origin_center = image_center + ground_truth.at(0).first;
-        double poly_origin_period = ground_truth.at(0).second;
-
-        int poly_idx;
-        int avg_period = 0;
-        int turnosity = 0;
         ceres::CostFunction *cost_function;
-
-        for (uint row_num = 0; row_num < image_height; row_num++) {
-            crop_row_center = image_center + ground_truth.at(row_num).first;
-            crop_row_period = ground_truth.at(row_num).second;
-            avg_period += crop_row_period;
-            if(std::abs(crop_row_center) > turnosity){
-                turnosity = std::abs(crop_row_center);
-            }
-            for(poly_idx = -1; poly_idx < 2; poly_idx++){
-                // cost_function = new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(new CropRowCostFunctor(image, poly_idx));
-                // m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
-                cost_function = GT_Residual::Create(row_num,
-                                                    crop_row_center + poly_idx * crop_row_period,
-                                                    poly_origin_center + poly_idx * poly_origin_period,
-                                                    poly_idx);
+        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+            for(int poly_idx = -1; poly_idx < 2; poly_idx++){
+                cost_function = CropRowCostFunctor::Create(new_intensity_map, poly_idx, row_num);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
             }
         }
-        // std::cout << "calculating gaussian kernel" << std::endl;
-        // avg_period /= image_height * 10;
-        // if(avg_period % 2 != 1)
-        //     avg_period++;
-        // std::cout << turnosity << " - " << poly_origin_center << std::endl;
-        // turnosity = std::abs(turnosity - poly_origin_center);
-        // if(turnosity % 2 != 1)
-        //     turnosity++;
-
         ceres::Solve(m_options, &m_problem, &m_summary);
-
-
-        std::cout << m_polynomial[0] << " " << m_polynomial[1] << " " << m_polynomial[2] << " " << m_polynomial[3] << " " <<
-                  m_polynomial[4] << " " << m_poly_period << '\n';
-
-        std::cout << m_perspective_factors[0] << " " << m_perspective_factors[1] << " " << m_perspective_factors[2] << " "
-                  << m_perspective_factors[3] << " " <<
-                  m_perspective_factors[4] << " " << m_perspective_factors[5] << " " << m_perspective_factors[6] << " "
-                  << m_perspective_factors[7] << '\n';
-
-        std::cout << "plotting fit" << std::endl;
-        plot_polys(image, m_polynomial, m_perspective_factors, m_poly_period, image, poly_origin_center, poly_origin_period);
-
-        std::cout << "[kernel size] " << turnosity << ", " << avg_period << std::endl;
-        // cv::Size ksize = cv::Size(avg_period, 3);
-        cv::Size ksize = cv::Size(0, 0);
-        double sigmaX = 1;
-        std::cout << "blurring map" << std::endl;
-        cv::imshow("pre blur", intensity_map);
-        cv::waitKey(0);
-        cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
-        // cv::blur(intensity_map, intensity_map, ksize);
-
-        cv::imshow("post blur", intensity_map);
-        cv::waitKey(0);
-        m_intensity_map = intensity_map;
+        std::cout << m_summary.FullReport() << std::endl;
+        std::cout << "solved" << std::endl;
     }
+
+    void Polyfit::fit_poly_on_points() {
+        ceres::Solver::Options m_options;
+        ceres::Problem m_problem;
+        ceres::Solver::Summary m_summary;
+
+        m_options.max_num_iterations = 50;
+        m_options.function_tolerance = 1e-10;
+        m_options.parameter_tolerance = 1e-14;
+        m_options.linear_solver_type = ceres::DENSE_QR;
+        m_options.minimizer_progress_to_stdout = false;
+
+        // int poly_origin_center = m_image_center + m_crop_row_points.at(0).first;
+        // period_type poly_origin_period = m_crop_row_points.at(0).second;
+        // period_type crop_row_center, crop_row_period;
+        std::vector<double> column_origin = {
+                m_crop_row_points.at(0).x,
+                m_crop_row_points.at(1).x,
+                m_crop_row_points.at(2).x,
+        };
+        int poly_idx;
+        ceres::CostFunction *cost_function;
+
+        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+            for(poly_idx = -1; poly_idx < 2; poly_idx++){
+                auto p = m_crop_row_points.at(row_num * 3 + (1 + poly_idx));
+                cost_function = PointResidual::Create(p.y, p.x, column_origin.at(1 + poly_idx), poly_idx);
+                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+    }
+        }
+        ceres::Solve(m_options, &m_problem, &m_summary);
+    }
+
     void Polyfit::plot_polys(const cv::Mat &inpImg_, const double *polynomial, const double *perspective_factors,
                              double poly_period, const cv::Mat drawImg_, int poly_origin_center, double poly_origin_period) {
         int poly_idx = 0;
@@ -735,21 +709,29 @@ namespace crd_cpp {
         }
         cv::imshow("plot_" + suffix, img);
         cv::imwrite("plot_" + suffix + ".jpg", img);
-        cv::waitKey(0);
-        cv::destroyWindow("plot_" + suffix);
+        cv::waitKey(DISPLAY_FPS);
     }
-
-    const int Polyfit::eval_poly(uint image_row_num, int poly_idx, const double m_polynomial[5],
-                                 const double m_perspective_factors[8], const double* m_poly_period)
-    {
+    void Polyfit::plot_crop_points(std::string suffix) {
+        std::cout << "[plotting]: " << suffix << std::endl;
+        cv::Mat img = m_image.clone();
+        for(auto p: m_crop_row_points){
+            cv::circle(img, p, 1, cv::Scalar(255, 0, 0), 1);
+        }
+        cv::imshow("plot_" + suffix, img);
+        cv::imwrite("plot_" + suffix + ".jpg", img);
+        cv::waitKey(DISPLAY_FPS);
+        // cv::destroyWindow("plot_" + suffix);
+    }
+    const int Polyfit::eval_poly(uint image_row_num, int poly_idx, const double polynomial[5],
+                                 const double perspective_factors[8], const double* poly_period) {
         int column;
-        double poly_origin = m_polynomial[4] + *(m_poly_period) * poly_idx;
-        column = (int) ((m_perspective_factors[1] + poly_origin * m_perspective_factors[0]) * m_polynomial[0] * pow(image_row_num, 4)
-                        + (m_perspective_factors[3] + poly_origin * m_perspective_factors[2]) * m_polynomial[1] * pow(image_row_num, 3)
-                        + (m_perspective_factors[5] + poly_origin * m_perspective_factors[4]) * m_polynomial[2] * pow(image_row_num, 2)
-                        + (m_perspective_factors[7] + poly_origin * m_perspective_factors[6]) * m_polynomial[3] * image_row_num
-                        + m_polynomial[4]
-                        + poly_idx * *(m_poly_period));
+        double poly_origin = polynomial[4] + *(poly_period) * poly_idx;
+        column = (int) ((perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
+                        + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3)
+                        + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2)
+                        + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * image_row_num
+                        + polynomial[4]
+                        + poly_idx * *(poly_period));
 
         return column;
     }
@@ -774,82 +756,52 @@ namespace crd_cpp {
         auto point = cv::Point2f((float) x, image_row_num);
         circle(drawImg_, point, 2, cv::Scalar(0, 255, 0), 2);
     }
-    void Polyfit::add_noise() {
-        /*
-        plot_fitted_polys("pre noise");
-        std::default_random_engine generator;
-
-        double fract = 1 / (10 * 2);
-        double mean;
-        double sigma;
-        int shift = 10;
-        for (uint i = 2; i < 5; i++) {
-            mean = m_polynomial[i];
-            sigma = mean * fract;
-            std::normal_distribution<double> distribution(mean, sigma);
-            auto val = distribution(generator);
-            std::cout << "grade: " << i << ": " << mean - val << std::endl;
-            m_polynomial[i] = val;
-        }
-
-        for(uint i = 2; i < 8; i++){
-            mean = m_perspective_factors[i];
-            sigma = mean * fract;
-            std::normal_distribution<double> distribution(mean, sigma);
-            auto val = distribution(generator);
-            std::cout << mean << ": " << val << std::endl;
-            m_perspective_factors[i] = val;
-        }
-        plot_fitted_polys("with noise");
-        */
-    }
-
     void Polyfit::fit(cv::Mat new_frame){
-        int crop_row_center;
-        double crop_row_period;
+        cv::Mat optical_flow = calculate_flow(new_frame);
+        for(cv::Point2f &p: m_crop_row_points){
+            p += optical_flow.at<cv::Point2f>(p);
+        }
+        plot_crop_points("pts after opt flow");
 
-        plot_fitted_polys("pre fit");
-        int image_height = m_intensity_map.rows;
-        int poly_idx;
+        fit_poly_on_points();
+        calculate_poly_points();
 
-        double mask_thresh = 10.0/255.0;
-        cv::Mat min_eigen, mask, optical_flow, flow_mask;
-
-
-        // Optional
-        //
-        cv::cornerMinEigenVal(m_intensity_map, min_eigen, 7, 3, cv::BORDER_DEFAULT);
-        // WARNING Optimize here!
-        cv::normalize(min_eigen, min_eigen, 1, 0, cv::NORM_MINMAX);
-        cv::threshold(min_eigen, min_eigen, mask_thresh, 255, cv::THRESH_BINARY);
-        // min_eigen.convertTo(mask, CV_64F);
-        min_eigen.convertTo(mask, cv::DataType<uchar>::type);
-
-        cv::calcOpticalFlowFarneback(m_intensity_map, new_frame, optical_flow, 0.5, 3, 15, 5, 5, 1.2, 0); // TODO: optimize params
-        cv::Mat debug_flow = drawDenseOptFlow(optical_flow, m_intensity_map, 8, cv::Scalar(0, 0, 255), flow_mask);
-        cv::imshow("optical_flow" , debug_flow);
-        cv::waitKey(0);
+        plot_fitted_polys("fit post opt flow effect");
 
         m_intensity_map = new_frame;
+        fit_poly_on_image(new_frame);
+        plot_fitted_polys("fit on intensity map");
 
+    }
 
-        ceres::CostFunction *cost_function;
-
-        std::cout << "adding constraints" << std::endl;
-        for (uint row_num = 0; row_num < image_height; row_num++) {
-            for(poly_idx = -1; poly_idx < 2; poly_idx++){
-                cost_function = new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(
-                        new CropRowCostFunctor(m_intensity_map, poly_idx, row_num)
-                );
-                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+    void Polyfit::calculate_poly_points() {
+        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+            for(int poly_idx = -1; poly_idx < 2; poly_idx++){
+                const int column = eval_poly(row_num, poly_idx);
+                m_crop_row_points.at(row_num * 3 + (1 + poly_idx)) = cv::Point2f(column, row_num);
+            }
             }
         }
 
-        std::cout << "solving" << std::endl;
-        ceres::Solve(m_options, &m_problem, &m_summary);
-        // std::cout << m_summary.FullReport() << std::endl;
-        std::cout << "solved" << std::endl;
-        plot_fitted_polys("post fit");
+    cv::Mat Polyfit::calculate_flow(const cv::Mat &new_frame) {
+        // double mask_thresh = 10.0/255.0;
+        // cv::Mat min_eigen, mask, optical_flow, flow_mask;
+        cv::Mat optical_flow;
+
+        // // Optional
+        // //
+        // cv::cornerMinEigenVal(m_intensity_map, min_eigen, 7, 3, cv::BORDER_DEFAULT);
+        // // WARNING Optimize here!
+        // cv::normalize(min_eigen, min_eigen, 1, 0, cv::NORM_MINMAX);
+        // cv::threshold(min_eigen, min_eigen, mask_thresh, 255, cv::THRESH_BINARY);
+        // // min_eigen.convertTo(mask, CV_64F);
+        // min_eigen.convertTo(mask, cv::DataType<uchar>::type);
+
+        calcOpticalFlowFarneback(m_intensity_map, new_frame, optical_flow, 0.5, 3, 15, 5, 5, 1.2, 0); // TODO: optimize params
+        // cv::Mat debug_flow = drawDenseOptFlow(optical_flow, m_intensity_map, 8, cv::Scalar(0, 0, 255), flow_mask);
+        // cv::imshow("optical_flow" , debug_flow);
+        // cv::waitKey(100);
+        return optical_flow;
     }
 
     /**

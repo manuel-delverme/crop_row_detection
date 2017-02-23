@@ -59,11 +59,11 @@ namespace crd_cpp {
     }
     cv::Mat ImagePreprocessor::process(std::string image_path) {
         cv::Mat image = cv::imread(image_path, CV_LOAD_IMAGE_COLOR);
-        return this->process(image);
+        return process(image);
     }
     cv::Mat ImagePreprocessor::process(cv::Mat image) {
             cv::Mat resized_image;
-        cv::resize(image, resized_image, m_image_size);
+            cv::resize(image, resized_image, m_image_size);
             cv::Mat intensity = ImagePreprocessor::convertToExG(resized_image);
 
             cv::Mat down_ExG_;

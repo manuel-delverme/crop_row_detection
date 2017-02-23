@@ -9,7 +9,7 @@ namespace crd_cpp{
         cv::Mat process(std::string image_path);
         private:
         cv::Size m_image_size;
-            cv::Mat convertToExG(cv::Mat&);
+        cv::Mat convertToExG(cv::Mat&);
     };
 }
 
