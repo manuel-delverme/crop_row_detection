@@ -3,58 +3,97 @@
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
 #include "CropRowDetector.h"
+#include <boost/scoped_ptr.hpp>
 
 int DISPLAY_FPS = 0; // 1000/60;
 
 namespace crd_cpp {
-    struct PointResidual {
-        PointResidual(double x, double y, double x0, double frequency_factor)
-                : x_(x), y_(y), x0_(x0), frequency_factor_(frequency_factor) {}
+    class PointResidual {
+    public:
+        static ceres::CostFunction *Create(double x, double y, int poly_idx) {
+            return (new ceres::AutoDiffCostFunction<PointResidual, 1, 5, 8, 1>(new PointResidual(x, y, poly_idx)));
+        }
 
         template<typename T>
-        bool operator()(const T *p, const T *pf, const T *f, T *residual) const {
-            //funzione residuo da minimizzare
-            residual[0] = T(y_) - ((pf[1] + T(x0_) * pf[0]) * p[0] * pow(T(x_), 4) +
-                                   (pf[3] + T(x0_) * pf[2]) * p[1] * pow(T(x_), 3) +
-                                   (pf[5] + T(x0_) * pf[4]) * p[2] * pow(T(x_), 2) +
-                                   (pf[7] + T(x0_) * pf[6]) * p[3] * pow(T(x_), 1) +
-                                   p[4] + T(frequency_factor_) * f[0]);
+        bool operator()(const T *poly_coeff, const T *perspective_coeff, const T *poly_period, T *residual) const {
+            residual[0] = T(target_column) -
+                    eval_poly_double(row_num_, poly_idx_, poly_coeff, perspective_coeff, poly_period);
             return true;
         }
-        // Factory to hide the construction of the CostFunction object from
-        // the client code.
-        static ceres::CostFunction* Create(double x, double y, double x0, double frequency_factor) {
-            return (new ceres::AutoDiffCostFunction<PointResidual, 1,5,8,1>(
-                    new PointResidual(x, y, x0, frequency_factor)));
+    public:
+        template<typename T>
+        const T eval_poly_double(double image_row_num, double poly_idx, const T *polynomial,
+                                               const T *perspective_factors, const T *poly_period) const {
+            T column;
+            T poly_origin = polynomial[4] + *(poly_period) * poly_idx;
+            column = (
+                    (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
+                    + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(T(image_row_num), 3)
+                    + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(T(image_row_num), 2)
+                    + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * T(image_row_num)
+                    + polynomial[4]
+                    + T(poly_idx) * *(poly_period)
+            );
+            return column;
         }
-        double x_;
-        double y_;
-        double x0_;
-        double frequency_factor_;
+        PointResidual(double row_num, double col_num, int poly_idx)
+                : row_num_(row_num), target_column(col_num), poly_idx_(poly_idx) {}
+        double row_num_;
+        double target_column;
+        double poly_idx_;
     };
+
     class CropRowCostFunctor {
     public:
-        bool operator()(const double* poly_coeffs, const double* prespective_coeff,
-                        const double* poly_period, double *residuals) const {
-            const int column = Polyfit::eval_poly(row_number_, poly_idx_, poly_coeffs, prespective_coeff, poly_period);
-            double loss = ((int) image_.at<uchar>(row_number_, column));
-            // TODO: saturate
+        bool operator()(const double *poly_coeffs, const double *prespective_coeff,
+                        const double *poly_period, double *residuals) const {
+            const double x = Polyfit::eval_poly_double(row_number_, poly_idx_, poly_coeffs, prespective_coeff, poly_period);
+            const double left = std::floor(x);
+            const double f_left = ((int) image_.at<uchar>(row_number_, left));
+            // left + 1 almost always exists
+            const double f_right = ((int) image_.at<uchar>(row_number_, left + 1));
+            const double loss = f_left + (f_right - f_left) * (x - left);
+
+            /*
+            double complexity = 0;
+            for(int idx = 0; idx < 3; idx++){
+                complexity += std::pow(poly_coeffs[idx],5 - idx);
+            }
+            for(int idx = 0; idx < 3; idx++){
+                complexity += std::pow(prespective_coeff[idx],7 - idx);
+            }
+             */
             // TODO: epsilon invariant
-            residuals[0] = loss;
+            // residuals[0] = -f_left;
+            /*
+            residuals[0] = loss
+                           + 100 * poly_coeffs[0]
+                           + 100 * poly_coeffs[1]
+                           + 100 * poly_coeffs[2]
+                           + 100 * prespective_coeff[0]
+                           + 100 * prespective_coeff[1]
+                           + 100 * prespective_coeff[2]
+                           + 100 * prespective_coeff[3]
+                    ; // + complexity;
+                    */
+            residuals[0] = -loss;
             return true;
         }
 
-        static ceres::CostFunction* Create(const cv::Mat image, int poly_idx, uint row_number) {
-            return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(new CropRowCostFunctor(image, poly_idx, row_number));
+        static ceres::CostFunction *Create(const cv::Mat image, int poly_idx, uint row_number) {
+            return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(
+                    new CropRowCostFunctor(image, poly_idx, row_number));
         }
+
     private:
-        CropRowCostFunctor(const cv::Mat& image, int poly_idx, uint row_number):
-                image_(image), poly_idx_(poly_idx), row_number_(row_number){}
+        CropRowCostFunctor(const cv::Mat &image, int poly_idx, uint row_number) :
+                image_(image), poly_idx_(poly_idx), row_number_(row_number) {}
 
         int poly_idx_;
         uint row_number_;
         cv::Mat image_;
     };
+
     CropRowDetector::CropRowDetector() {}
 
     void CropRowDetector::load(cv::Size image_size) {
@@ -167,6 +206,7 @@ namespace crd_cpp {
         m_best_energy_by_row.resize(m_image_height);
         // Calcolo quantità necesarrie a CrossCorrelation
     }
+
     void CropRowDetector::template_matching(cv::Mat intensity_map) {
         double energy = 0;
         double best_energy = -1;
@@ -182,7 +222,7 @@ namespace crd_cpp {
         for (uint image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
             for (period_idx_type period_idx = 0; period_idx < m_nd; period_idx++) {
                 const phase_type half_band = (const phase_type) std::floor(m_periods[period_idx] / 2);
-                int phase_idx = - m_first_phase - half_band;
+                int phase_idx = -m_first_phase - half_band;
                 for (phase_type phase = -half_band; phase < half_band; phase++, phase_idx++) {
                     energy = CrossCorrelation(image_row_num, phase, period_idx);
                     m_energy_map.at(image_row_num).at(period_idx).at(phase_idx) = energy;
@@ -213,7 +253,8 @@ namespace crd_cpp {
         double halfd = .5 * period;
 
         int kStart = (int) floor((-(m_image_width / 2 + phase) + halfa) / period);    // offset prima onda
-        int kEnd = (int) floor(((m_image_width / 2 - phase) + halfa) / period);   // offset ultima onda prima della fine dell'immagine
+        int kEnd = (int) floor(
+                ((m_image_width / 2 - phase) + halfa) / period);   // offset ultima onda prima della fine dell'immagine
 
         // Calcolo centro dell'onda quadra positiva e negativa
         double distance_positive_negative_pulse_center = halfd - halfb;
@@ -242,11 +283,11 @@ namespace crd_cpp {
 
         if (negative_pulse_end >= 0) {
             negative_correlation_value = cumulative_sum(row_number, negative_pulse_end)
-                                         -cumulative_sum(row_number, negative_pulse_start); //tolto  -cumulative_sum(row_number, negative_pulse_start-1);
+                                         - cumulative_sum(row_number,
+                                                          negative_pulse_start); //tolto  -cumulative_sum(row_number, negative_pulse_start-1);
 
             negative_pixels = negative_pulse_end - negative_pulse_start + 1;
-        }
-        else {
+        } else {
             negative_correlation_value = 0;
             negative_pixels = 0;
         }
@@ -254,8 +295,6 @@ namespace crd_cpp {
 
         positive_pulse_center += period;
         for (int k = kStart + 1; k < kEnd; k++, positive_pulse_center += period) {
-
-
 
 
             positive_pulse_start = std::floor(positive_pulse_center - halfa);
@@ -289,8 +328,7 @@ namespace crd_cpp {
 
 
         negative_pulse_start = std::floor(positive_pulse_center + distance_positive_negative_pulse_center);
-        if(negative_pulse_start < m_image_width)
-        {
+        if (negative_pulse_start < m_image_width) {
             negative_pulse_end = negative_pulse_start + b - 1;
 
             if (negative_pulse_end >= m_image_width) {
@@ -301,7 +339,8 @@ namespace crd_cpp {
             negative_pixels += (negative_pulse_end - negative_pulse_start + 1);
         }
 
-        return (double)(negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) / (double)(positive_pixels * negative_pixels);
+        return (double) (negative_pixels * positive_correlation_value - positive_pixels * negative_correlation_value) /
+               (double) (positive_pixels * negative_pixels);
     }
 
 
@@ -511,23 +550,63 @@ namespace crd_cpp {
         delete[] m_periods;
     }
 
-    Polyfit::Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth) {
+    Polyfit::Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, int ks) {
         m_image = image.clone();
         m_image_center = image.cols / 2;
         m_image_height = image.rows;
         m_intensity_map = intensity_map;
         m_crop_row_points = std::vector<cv::Point2f>((size_t) image.rows * 3);
 
+        std::reverse(ground_truth.begin(), ground_truth.end());
         fit_poly_on_points(ground_truth);
         calculate_poly_points(); // not really needded
 
-        cv::Size ksize = cv::Size(0, 0);
-        double sigmaX = 1;
-        std::cout << "blurring map" << std::endl;
+        cv::Size ksize = cv::Size(ks, ks);
+        double sigmaX = 10;
+        std::cout << "[plotting] pre blur" << std::endl;
+        cv::imshow("post-blurr", intensity_map);
+        cv::waitKey(0);
+        cv::destroyAllWindows();
+
         cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
+        // cv::medianBlur(intensity_map, intensity_map, 11);
+
+        std::cout << "[plotting] post blur" << std::endl;
+        cv::imshow("post-blurr", intensity_map);
+        cv::waitKey(0);
+        cv::destroyAllWindows();
+
         plot_fitted_polys("initial fit");
         fit_poly_on_image(intensity_map);
+
+        m_polynomial[4] *= 1.01;
         plot_fitted_polys("imap fit");
+
+        fit_poly_on_image(intensity_map);
+        plot_fitted_polys("imap fit2");
+    }
+    void Polyfit::fit_poly_on_image(cv::Mat new_intensity_map) {
+        ceres::Solver::Options m_options;
+        ceres::Problem m_problem;
+        ceres::Solver::Summary m_summary;
+
+        m_options.max_num_iterations = 100;
+        // m_options.function_tolerance = 1e-14;
+        // m_options.parameter_tolerance = 1e-14;
+        m_options.function_tolerance = 1e-100;
+        m_options.parameter_tolerance = 1e-100;
+        m_options.linear_solver_type = ceres::DENSE_QR;
+        m_options.minimizer_progress_to_stdout = true;
+
+        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+            for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
+                ceres::CostFunction *cost_function = CropRowCostFunctor::Create(new_intensity_map, poly_idx, row_num);
+                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+            }
+        }
+        ceres::Solve(m_options, &m_problem, &m_summary);
+        std::cout << m_summary.FullReport() << std::endl;
+        std::cout << "solved" << std::endl;
     }
 
     void Polyfit::fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points) {
@@ -541,9 +620,6 @@ namespace crd_cpp {
         m_options.linear_solver_type = ceres::DENSE_QR;
         m_options.minimizer_progress_to_stdout = false;
 
-
-        int poly_origin_center = m_image_center + points.at(0).first;
-        period_type poly_origin_period = points.at(0).second;
         period_type crop_row_center, crop_row_period;
         int poly_idx;
         ceres::CostFunction *cost_function;
@@ -551,39 +627,14 @@ namespace crd_cpp {
         for (uint row_num = 0; row_num < m_image_height; row_num++) {
             crop_row_center = m_image_center + points.at(row_num).first;
             crop_row_period = points.at(row_num).second;
-            for(poly_idx = -1; poly_idx < 2; poly_idx++){
-                cost_function = PointResidual::Create(row_num,
-                                                    crop_row_center + poly_idx * crop_row_period,
-                                                    poly_origin_center + poly_idx * poly_origin_period,
-                                                    poly_idx);
+            for (poly_idx = -1; poly_idx < 2; poly_idx++) {
+                cost_function = PointResidual::Create(row_num, crop_row_center + poly_idx * crop_row_period, poly_idx);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
             }
         }
         ceres::Solve(m_options, &m_problem, &m_summary);
     }
 
-    void Polyfit::fit_poly_on_image(cv::Mat new_intensity_map) {
-        ceres::Solver::Options m_options;
-        ceres::Problem m_problem;
-        ceres::Solver::Summary m_summary;
-
-        m_options.max_num_iterations = 50;
-        m_options.function_tolerance = 1e-10;
-        m_options.parameter_tolerance = 1e-14;
-        m_options.linear_solver_type = ceres::DENSE_QR;
-        m_options.minimizer_progress_to_stdout = true;
-
-        ceres::CostFunction *cost_function;
-        for (uint row_num = 0; row_num < m_image_height; row_num++) {
-            for(int poly_idx = -1; poly_idx < 2; poly_idx++){
-                cost_function = CropRowCostFunctor::Create(new_intensity_map, poly_idx, row_num);
-                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
-            }
-        }
-        ceres::Solve(m_options, &m_problem, &m_summary);
-        std::cout << m_summary.FullReport() << std::endl;
-        std::cout << "solved" << std::endl;
-    }
 
     void Polyfit::fit_poly_on_points() {
         ceres::Solver::Options m_options;
@@ -596,125 +647,44 @@ namespace crd_cpp {
         m_options.linear_solver_type = ceres::DENSE_QR;
         m_options.minimizer_progress_to_stdout = false;
 
-        // int poly_origin_center = m_image_center + m_crop_row_points.at(0).first;
-        // period_type poly_origin_period = m_crop_row_points.at(0).second;
-        // period_type crop_row_center, crop_row_period;
-        std::vector<double> column_origin = {
-                m_crop_row_points.at(0).x,
-                m_crop_row_points.at(1).x,
-                m_crop_row_points.at(2).x,
-        };
         int poly_idx;
         ceres::CostFunction *cost_function;
-
         for (uint row_num = 0; row_num < m_image_height; row_num++) {
-            for(poly_idx = -1; poly_idx < 2; poly_idx++){
+            for (poly_idx = -1; poly_idx < 2; poly_idx++) {
                 auto p = m_crop_row_points.at(row_num * 3 + (1 + poly_idx));
-                cost_function = PointResidual::Create(p.y, p.x, column_origin.at(1 + poly_idx), poly_idx);
+                cost_function = PointResidual::Create(p.y, p.x, poly_idx);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
-    }
+            }
         }
         ceres::Solve(m_options, &m_problem, &m_summary);
     }
 
-    void Polyfit::plot_polys(const cv::Mat &inpImg_, const double *polynomial, const double *perspective_factors,
-                             double poly_period, const cv::Mat drawImg_, int poly_origin_center, double poly_origin_period) {
-        int poly_idx = 0;
-        double x0 = poly_origin_center + poly_idx * poly_origin_period;
-
-        poly_idx = 1;
-        double x0_right = poly_origin_center + poly_idx * poly_origin_period;
-
-        poly_idx = 2;
-        double x0_2right = poly_origin_center + poly_idx * poly_origin_period;
-
-        poly_idx = 3;
-        double x0_3right = poly_origin_center + poly_idx * poly_origin_period;
-
-        poly_idx = -1;
-        double x0_left = poly_origin_center + poly_idx * poly_origin_period;
-
-        poly_idx = -2;
-        double x0_2left = poly_origin_center + poly_idx * poly_origin_period;
-
-        for (uint image_row_num = 0; image_row_num < inpImg_.rows; image_row_num++) {
-            draw_crop(polynomial, perspective_factors, drawImg_, x0, image_row_num);
-            circle(drawImg_, cv::Point2f(
-                    ((perspective_factors[1] + x0_right * perspective_factors[0]) * polynomial[0] *
-                     pow(image_row_num, 4) +
-                     (perspective_factors[3] + x0_right * perspective_factors[2]) * polynomial[1] *
-                     pow(image_row_num, 3) +
-                     (perspective_factors[5] + x0_right * perspective_factors[4]) * polynomial[2] *
-                     pow(image_row_num, 2) +
-                     (perspective_factors[7] + x0_right * perspective_factors[6]) * polynomial[3] * image_row_num +
-                     polynomial[4] + poly_period), image_row_num), 2, cv::Scalar(0, 255, 0), 2);
-            circle(drawImg_, cv::Point2f(
-                    ((perspective_factors[1] + x0_left * perspective_factors[0]) * polynomial[0] *
-                     pow(image_row_num, 4) +
-                     (perspective_factors[3] + x0_left * perspective_factors[2]) * polynomial[1] *
-                     pow(image_row_num, 3) +
-                     (perspective_factors[5] + x0_left * perspective_factors[4]) * polynomial[2] *
-                     pow(image_row_num, 2) +
-                     (perspective_factors[7] + x0_left * perspective_factors[6]) * polynomial[3] * image_row_num +
-                     polynomial[4] - poly_period), image_row_num), 2, cv::Scalar(0, 255, 0), 2);
-            circle(drawImg_, cv::Point2f(
-                    ((perspective_factors[1] + x0_2right * perspective_factors[0]) * polynomial[0] *
-                     pow(image_row_num, 4) +
-                     (perspective_factors[3] + x0_2right * perspective_factors[2]) * polynomial[1] *
-                     pow(image_row_num, 3) +
-                     (perspective_factors[5] + x0_2right * perspective_factors[4]) * polynomial[2] *
-                     pow(image_row_num, 2) +
-                     (perspective_factors[7] + x0_2right * perspective_factors[6]) * polynomial[3] * image_row_num +
-                     polynomial[4] + 2 * poly_period), image_row_num), 2, cv::Scalar(255, 0, 0), 2);
-            circle(drawImg_, cv::Point2f(
-                    ((perspective_factors[1] + x0_2left * perspective_factors[0]) * polynomial[0] *
-                     pow(image_row_num, 4) +
-                     (perspective_factors[3] + x0_2left * perspective_factors[2]) * polynomial[1] *
-                     pow(image_row_num, 3) +
-                     (perspective_factors[5] + x0_2left * perspective_factors[4]) * polynomial[2] *
-                     pow(image_row_num, 2) +
-                     (perspective_factors[7] + x0_2left * perspective_factors[6]) * polynomial[3] * image_row_num +
-                     polynomial[4] - 2 * poly_period), image_row_num), 2, cv::Scalar(255, 0, 0), 2);
-            circle(drawImg_, cv::Point2f(
-                    ((perspective_factors[1] + x0_3right * perspective_factors[0]) * polynomial[0] *
-                     pow(image_row_num, 4) +
-                     (perspective_factors[3] + x0_3right * perspective_factors[2]) * polynomial[1] *
-                     pow(image_row_num, 3) +
-                     (perspective_factors[5] + x0_3right * perspective_factors[4]) * polynomial[2] *
-                     pow(image_row_num, 2) +
-                     (perspective_factors[7] + x0_3right * perspective_factors[6]) * polynomial[3] * image_row_num +
-                     polynomial[4] + 3 * poly_period), image_row_num), 2, cv::Scalar(255, 0, 0), 2);
-        }
-        cv::destroyAllWindows();
-        std::cout << "plotting fit" << std::endl;
-        imshow("drawImg_", drawImg_);
-        cv::waitKey(0);
-    }
     void Polyfit::plot_fitted_polys(std::string suffix) {
         std::cout << "[plotting]: " << suffix << std::endl;
         cv::Mat img = m_image.clone();
         cv::Scalar_<double> color;
 
-        for (uint image_row_num = 0; image_row_num < m_image.rows; image_row_num++) {
-            for(int poly_idx = -2; poly_idx < 4; poly_idx++){
+        for (uint image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
+            for (int poly_idx = -2; poly_idx < 4; poly_idx++) {
                 int column = eval_poly(image_row_num, poly_idx);
 
-                if(std::abs(poly_idx) < 2)
+                if (std::abs(poly_idx) < 2)
                     color = cv::Scalar(0, 0, 255);
                 else
                     color = cv::Scalar(127, 127, 127);
 
-                cv::circle(img, cv::Point2f(column, image_row_num), 2, color, 1);
+                cv::circle(img, cv::Point2f(column, m_image_height - image_row_num - 1), 2, color, 1);
             }
         }
         cv::imshow("plot_" + suffix, img);
         cv::imwrite("plot_" + suffix + ".jpg", img);
         cv::waitKey(DISPLAY_FPS);
     }
+
     void Polyfit::plot_crop_points(std::string suffix) {
         std::cout << "[plotting]: " << suffix << std::endl;
         cv::Mat img = m_image.clone();
-        for(auto p: m_crop_row_points){
+        for (auto p: m_crop_row_points) {
             cv::circle(img, p, 1, cv::Scalar(255, 0, 0), 1);
         }
         cv::imshow("plot_" + suffix, img);
@@ -722,51 +692,41 @@ namespace crd_cpp {
         cv::waitKey(DISPLAY_FPS);
         // cv::destroyWindow("plot_" + suffix);
     }
+
     const int Polyfit::eval_poly(uint image_row_num, int poly_idx, const double polynomial[5],
-                                 const double perspective_factors[8], const double* poly_period) {
-        int column;
+                                 const double perspective_factors[8], const double *poly_period) {
+        return (int) eval_poly_double(image_row_num, poly_idx, polynomial, perspective_factors, poly_period);
+    }
+    const double Polyfit::eval_poly_double(uint image_row_num, int poly_idx, const double *polynomial,
+                                           const double *perspective_factors, const double *poly_period) {
+        double column;
         double poly_origin = polynomial[4] + *(poly_period) * poly_idx;
-        column = (int) ((perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
-                        + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3)
-                        + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2)
-                        + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * image_row_num
-                        + polynomial[4]
-                        + poly_idx * *(poly_period));
-
+        column = (
+                  (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
+                + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3)
+                + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2)
+                + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * image_row_num
+                + polynomial[4]
+                + poly_idx * *(poly_period)
+        );
         return column;
     }
-    int Polyfit::eval_poly(uint image_row_num, int poly_idx){
-        int column;
-        double poly_origin = m_polynomial[4] + m_poly_period * poly_idx;
-        column = (int) ((m_perspective_factors[1] + poly_origin * m_perspective_factors[0]) * m_polynomial[0] * pow(image_row_num, 4)
-                        + (m_perspective_factors[3] + poly_origin * m_perspective_factors[2]) * m_polynomial[1] * pow(image_row_num, 3)
-                        + (m_perspective_factors[5] + poly_origin * m_perspective_factors[4]) * m_polynomial[2] * pow(image_row_num, 2)
-                        + (m_perspective_factors[7] + poly_origin * m_perspective_factors[6]) * m_polynomial[3] * image_row_num
-                        + m_polynomial[4]
-                        + poly_idx * m_poly_period);
 
-        return column;
+    int Polyfit::eval_poly(uint image_row_num, int poly_idx) {
+        return eval_poly(image_row_num, poly_idx, m_polynomial, m_perspective_factors, &m_poly_period);
     }
-    void Polyfit::draw_crop(const double *polynomial, const double *perspective_factors, const cv::Mat &drawImg_, double x0, uint image_row_num) {
-        auto x = (perspective_factors[1] + x0 * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4) +
-                 (perspective_factors[3] + x0 * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3) +
-                 (perspective_factors[5] + x0 * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2) +
-                 (perspective_factors[7] + x0 * perspective_factors[6]) * polynomial[3] * image_row_num + polynomial[4];
 
-        auto point = cv::Point2f((float) x, image_row_num);
-        circle(drawImg_, point, 2, cv::Scalar(0, 255, 0), 2);
-    }
-    void Polyfit::fit(cv::Mat new_frame){
+    void Polyfit::fit(cv::Mat new_frame) {
         cv::Mat optical_flow = calculate_flow(new_frame);
-        for(cv::Point2f &p: m_crop_row_points){
+        for (cv::Point2f &p: m_crop_row_points) {
             p += optical_flow.at<cv::Point2f>(p);
         }
-        plot_crop_points("pts after opt flow");
+        // plot_crop_points("pts after opt flow");
 
         fit_poly_on_points();
         calculate_poly_points();
 
-        plot_fitted_polys("fit post opt flow effect");
+        // plot_fitted_polys("fit post opt flow effect");
 
         m_intensity_map = new_frame;
         fit_poly_on_image(new_frame);
@@ -776,12 +736,12 @@ namespace crd_cpp {
 
     void Polyfit::calculate_poly_points() {
         for (uint row_num = 0; row_num < m_image_height; row_num++) {
-            for(int poly_idx = -1; poly_idx < 2; poly_idx++){
+            for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
                 const int column = eval_poly(row_num, poly_idx);
                 m_crop_row_points.at(row_num * 3 + (1 + poly_idx)) = cv::Point2f(column, row_num);
             }
-            }
         }
+    }
 
     cv::Mat Polyfit::calculate_flow(const cv::Mat &new_frame) {
         // double mask_thresh = 10.0/255.0;
@@ -797,7 +757,8 @@ namespace crd_cpp {
         // // min_eigen.convertTo(mask, CV_64F);
         // min_eigen.convertTo(mask, cv::DataType<uchar>::type);
 
-        calcOpticalFlowFarneback(m_intensity_map, new_frame, optical_flow, 0.5, 3, 15, 5, 5, 1.2, 0); // TODO: optimize params
+        calcOpticalFlowFarneback(m_intensity_map, new_frame, optical_flow, 0.5, 3, 15, 5, 5, 1.2,
+                                 0); // TODO: optimize params
         // cv::Mat debug_flow = drawDenseOptFlow(optical_flow, m_intensity_map, 8, cv::Scalar(0, 0, 255), flow_mask);
         // cv::imshow("optical_flow" , debug_flow);
         // cv::waitKey(100);
@@ -824,50 +785,48 @@ namespace crd_cpp {
         the mask.
     */
     cv::Mat Polyfit::drawDenseOptFlow(const cv::Mat &flow, const cv::Mat &img, int step,
-                                      cv::Scalar color, const cv::Mat &mask ){
-        if( flow.depth() != cv::DataType<float>::type || !flow.rows || !flow.cols
+                                      cv::Scalar color, const cv::Mat &mask) {
+        if (flow.depth() != cv::DataType<float>::type || !flow.rows || !flow.cols
             || flow.channels() != 2 ||
             img.rows != flow.rows || img.cols != flow.cols || (img.channels()
                                                                != 1 && img.channels() != 3) ||
-            (!mask.empty() && ( mask.depth() != cv::DataType<uchar>::type ||
-                                mask.channels() != 1 ||
-                                mask.rows != flow.rows || mask.cols != flow.cols ) ) )
+            (!mask.empty() && (mask.depth() != cv::DataType<uchar>::type ||
+                               mask.channels() != 1 ||
+                               mask.rows != flow.rows || mask.cols != flow.cols)))
             throw std::invalid_argument("Unsopported  or incompatible images");
 
-        cv::Mat flow_img(flow.rows, flow.cols, cv::DataType< cv::Vec< uchar, 3>>::type);
+        cv::Mat flow_img(flow.rows, flow.cols, cv::DataType<cv::Vec<uchar, 3>>::type);
         cv::Mat tmp_img = img;
 
-        if( img.channels() == 1 )
-        {
-            if( img.type() != cv::DataType<uchar>::type )
-                img.convertTo(tmp_img, cv::DataType< uchar >::type);
-            cvtColor(tmp_img, flow_img, cv::COLOR_GRAY2BGR );
+        if (img.channels() == 1) {
+            if (img.type() != cv::DataType<uchar>::type)
+                img.convertTo(tmp_img, cv::DataType<uchar>::type);
+            cvtColor(tmp_img, flow_img, cv::COLOR_GRAY2BGR);
         } else {
-            if( img.type() != cv::DataType<cv::Vec3b>::type )
-                img.convertTo(tmp_img, cv::DataType<cv::Vec3b >::type);
+            if (img.type() != cv::DataType<cv::Vec3b>::type)
+                img.convertTo(tmp_img, cv::DataType<cv::Vec3b>::type);
             tmp_img.copyTo(flow_img);
         }
-        if( !mask.empty() ){
-            for(int y = 0; y < flow_img.rows; y += step)
-            {
+        if (!mask.empty()) {
+            for (int y = 0; y < flow_img.rows; y += step) {
                 const uchar *mask_p = mask.ptr<uchar>(y);
                 const cv::Point2f *flow_p = flow.ptr<cv::Point2f>(y);
 
-                for(int x = 0; x < flow_img.cols; x += step, mask_p += step,
-                                                  flow_p += step ){
-                    if( *mask_p ) {
+                for (int x = 0; x < flow_img.cols; x += step, mask_p += step,
+                                                   flow_p += step) {
+                    if (*mask_p) {
                         const cv::Point2f &fxy = *flow_p;
-                        line(flow_img, cv::Point(x,y), cv::Point( cvRound(x + fxy.x), cvRound(y +fxy.y) ), color);
+                        line(flow_img, cv::Point(x, y), cv::Point(cvRound(x + fxy.x), cvRound(y + fxy.y)), color);
                     }
                 }
             }
         } else {
-            for(int y = 0; y < flow_img.rows; y += step) {
+            for (int y = 0; y < flow_img.rows; y += step) {
                 const cv::Point2f *flow_p = flow.ptr<cv::Point2f>(y);
-                for(int x = 0; x < flow_img.cols; x += step, flow_p += step ) {
+                for (int x = 0; x < flow_img.cols; x += step, flow_p += step) {
                     const cv::Point2f &fxy = *flow_p;
-                    line(flow_img, cv::Point(x,y),
-                         cv::Point(cvRound(x + fxy.x), cvRound(y +fxy.y) ), color);
+                    line(flow_img, cv::Point(x, y),
+                         cv::Point(cvRound(x + fxy.x), cvRound(y + fxy.y)), color);
                 }
             }
         }
