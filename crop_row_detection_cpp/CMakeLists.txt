@@ -58,20 +58,20 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++11 -Ofast -march
 # -Wlogical-op -Wfloat-equal -Wstrict-aliasing=2 -Wredundant-decls \
 
 find_package(OpenCV REQUIRED)
-find_package(catkin REQUIRED COMPONENTS
-        roscpp
-        rospy
-        std_msgs
-        geometry_msgs
-        sensor_msgs
-        tf
-        cv_bridge
-        )
+# find_package(catkin REQUIRED COMPONENTS
+#         roscpp
+#         rospy
+#         std_msgs
+#         geometry_msgs
+#         sensor_msgs
+#         tf
+#         cv_bridge
+#         )
 
 find_package(OpenCV REQUIRED)
 find_package(Ceres REQUIRED)
 
-catkin_package(INCLUDE_DIRS include)
+# catkin_package(INCLUDE_DIRS include)
 include_directories(
         include/
         ${CERES_INCLUDE_DIRS}
@@ -79,13 +79,25 @@ include_directories(
         ${OpenCV_INCLUDE_DIR}
         )
 
-add_library(crop_row_detection_cpp_detector
-        src/crop_row_detection_main.cpp
-        src/CropRowDetector.cpp
-        src/ImagePreprocessor.cpp
-        )
+aux_source_directory( src CROP_ROW_DETECTION_SRC )
 
-target_link_libraries(crop_row_detection_cpp_detector
-        ${OpenCV_LIBS}
-        ${CERES_LIBRARIES}
-        )
+add_library(crop_row_detection STATIC ${CROP_ROW_DETECTION_SRC})
+set_target_properties(crop_row_detection PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+target_link_libraries( crop_row_detection
+                       ${OpenCV_LIBS}
+                       ${CERES_LIBRARIES})
+
+add_executable(test_video apps/test_video.cpp)
+target_link_libraries( test_video
+                       crop_row_detection
+                       ${OpenCV_LIBS}
+                       ${CERES_LIBRARIES})
+set_target_properties( test_video PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+
+add_executable(test_image apps/test_image.cpp)
+target_link_libraries( test_image
+                       crop_row_detection
+                       ${OpenCV_LIBS}
+                       ${CERES_LIBRARIES})
+set_target_properties( test_image
+PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
