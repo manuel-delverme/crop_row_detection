@@ -578,12 +578,7 @@ namespace crd_cpp {
 
         plot_fitted_polys("initial fit");
         fit_poly_on_image(intensity_map);
-
-        m_polynomial[4] *= 1.01;
         plot_fitted_polys("imap fit");
-
-        fit_poly_on_image(intensity_map);
-        plot_fitted_polys("imap fit2");
     }
     void Polyfit::fit_poly_on_image(cv::Mat new_intensity_map) {
         ceres::Solver::Options m_options;
