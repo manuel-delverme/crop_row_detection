@@ -157,7 +157,9 @@ namespace crd_cpp {
         cv::Mat m_image;
         static const int eval_poly(uint image_row_num, int poly_idx, const double m_polynomial[5],
                                    const double m_perspective_factors[8], const double* m_poly_period);
-        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth);
+        static const double eval_poly_double(uint image_row_num, int poly_idx, const double m_polynomial[5],
+                                   const double m_perspective_factors[8], const double* m_poly_period);
+        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, int ksize);
         void fit(cv::Mat new_frame);
         void add_noise();
     };
