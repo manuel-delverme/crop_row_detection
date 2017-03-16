@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <cmath>
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
 #include "CropRowDetector.h"
@@ -16,8 +17,9 @@ namespace crd_cpp {
 
         template<typename T>
         bool operator()(const T *poly_coeff, const T *perspective_coeff, const T *poly_period, T *residual) const {
-            residual[0] = T(target_column) -
-                    eval_poly_double(row_num_, poly_idx_, poly_coeff, perspective_coeff, poly_period);
+            residual[0] = T(target_column)
+                          - eval_poly_double(row_num_, poly_idx_, poly_coeff, perspective_coeff, poly_period);
+            // residual[0] = std::min(residual[0], 10);
             return true;
         }
     public:
@@ -48,7 +50,7 @@ namespace crd_cpp {
         bool operator()(const double *poly_coeffs, const double *prespective_coeff,
                         const double *poly_period, double *residuals) const {
             const double x = Polyfit::eval_poly_double(row_number_, poly_idx_, poly_coeffs, prespective_coeff, poly_period);
-            const double left = std::floor(x);
+            const int left = (const int) std::floor(x);
             const double f_left = ((int) image_.at<uchar>(row_number_, left));
             // left + 1 almost always exists
             const double f_right = ((int) image_.at<uchar>(row_number_, left + 1));
@@ -80,23 +82,23 @@ namespace crd_cpp {
             return true;
         }
 
-        static ceres::CostFunction *Create(const cv::Mat image, int poly_idx, uint row_number) {
+        static ceres::CostFunction *Create(const cv::Mat image, int poly_idx, int row_number) {
             return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(
                     new CropRowCostFunctor(image, poly_idx, row_number));
         }
 
     private:
-        CropRowCostFunctor(const cv::Mat &image, int poly_idx, uint row_number) :
+        CropRowCostFunctor(const cv::Mat &image, int poly_idx, int row_number) :
                 image_(image), poly_idx_(poly_idx), row_number_(row_number) {}
 
-        int poly_idx_;
-        uint row_number_;
         cv::Mat image_;
+        int poly_idx_;
+        int row_number_;
     };
 
     CropRowDetector::CropRowDetector() {}
 
-    void CropRowDetector::load(cv::Size image_size) {
+    void CropRowDetector::pre_alloc(cv::Size image_size) {
         std::cout << "cpp::loading..." << std::endl;
         // cv::Mat intensity_map_64f;
         // intensity_map.convertTo(intensity_map_64f, CV_64F);
@@ -104,12 +106,14 @@ namespace crd_cpp {
         std::cout << "cpp::loading..." << std::endl;
 
         // 1 + is an hack
-        m_dataset_ptr = new data_type[(1 + image_size.height) * m_nd * m_nc];
+        int data_struct_size = (1 + image_size.height) * m_nd * m_nc;
+        assert(data_struct_size > 0);
+        m_dataset_ptr = new data_type[(size_t) data_struct_size];
 
         data_type *dataset_period_ptr = m_dataset_ptr;
         data_type *dataset_tuple_ptr;
 
-        for (uint period_idx = 0; period_idx < m_nd; period_idx++, dataset_period_ptr += m_nc) {
+        for (int period_idx = 0; period_idx < m_nd; period_idx++, dataset_period_ptr += m_nc) {
             dataset_tuple_ptr = dataset_period_ptr;
             for (phase_type phase = m_first_phase; phase < -m_first_phase; phase++, dataset_tuple_ptr++) {
                 dataset_tuple_ptr->tuple_value = 0;
@@ -121,21 +125,22 @@ namespace crd_cpp {
 
         // dynamic programming setup
         std::cout << "dyn prog...";
-        m_best_energy_by_row.resize(m_image_height);
+        assert(m_image_height > 0);
+        m_best_energy_by_row.resize((size_t) m_image_height);
         m_search_space_length = (size_t) std::max(m_nd, m_nc);
         m_parabola_center = new phase_type[m_search_space_length];
         m_intersection_points = new energy_type[m_search_space_length + 1];
-        m_best_nodes = std::vector<old_tuple_type>(m_image_height);
+        m_best_nodes = std::vector<old_tuple_type>((size_t) m_image_height);
 
-        m_periods = new period_type[m_nd];
+        m_periods = new period_type[(size_t) m_nd];
         // TODO: interleave data struct
 
         // will be used for xcorr
         std::cout << "xcorr...";
 
-        double halfa;
-        double halfb;
-        double halfd;
+        // double halfa;
+        // double halfb;
+        // double halfd;
 
         // m_positive_pulse_start.resize(m_nd, std::vector<int>(m_nc, 0));
         // m_positive_pulse_end.resize(m_nd, std::vector<int>(m_nc, 0));
@@ -156,7 +161,7 @@ namespace crd_cpp {
         // m_kEnds.resize(m_nd, std::vector<int>(m_nc, 0));
 
         double period = m_mind;
-        for (uint period_idx = 0; period_idx < m_nd; period_idx++, period *= m_dstep) {
+        for (int period_idx = 0; period_idx < m_nd; period_idx++, period *= m_dstep) {
             m_periods[period_idx] = (period_type) period;
         }
         //     double scale = period * m_period_scale_factor;
@@ -197,14 +202,13 @@ namespace crd_cpp {
         // }
 
         //xcorr setup
-        m_energy_map.resize(m_image_height);
-        for (uint i = 0; i < m_image_height; i++) {
-            m_energy_map.at(i).resize(m_nd);
-            for (uint j = 0; j < m_nd; ++j)
-                m_energy_map.at(i).at(j).resize(m_nc);
+        m_energy_map.resize((uint) m_image_height);
+        m_best_energy_by_row.resize((size_t) m_image_height);
+        for (uint i = 0; i < (uint) m_image_height; i++) {
+            m_energy_map.at(i).resize((size_t) m_nd);
+            for (uint j = 0; j < (uint) m_nd; ++j)
+                m_energy_map.at(i).at(j).resize((size_t) m_nc);
         }
-        m_best_energy_by_row.resize(m_image_height);
-        // Calcolo quantità necesarrie a CrossCorrelation
     }
 
     void CropRowDetector::template_matching(cv::Mat intensity_map) {
@@ -222,10 +226,10 @@ namespace crd_cpp {
         for (uint image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
             for (period_idx_type period_idx = 0; period_idx < m_nd; period_idx++) {
                 const phase_type half_band = (const phase_type) std::floor(m_periods[period_idx] / 2);
-                int phase_idx = -m_first_phase - half_band;
+                int phase_idx = (int) (-m_first_phase - half_band);
                 for (phase_type phase = -half_band; phase < half_band; phase++, phase_idx++) {
                     energy = CrossCorrelation(image_row_num, phase, period_idx);
-                    m_energy_map.at(image_row_num).at(period_idx).at(phase_idx) = energy;
+                    m_energy_map.at(image_row_num).at(period_idx).at((size_t) phase_idx) = energy;
                     if (energy > best_energy) {
                         best_energy = energy;
                     }
@@ -237,7 +241,7 @@ namespace crd_cpp {
     }
 
     inline double
-    CropRowDetector::CrossCorrelation(const uint row_number, const phase_type phase, const period_idx_type period_idx) {
+    CropRowDetector::CrossCorrelation(const int row_number, const phase_type phase, const period_idx_type period_idx) {
 
         period_type period = m_periods[period_idx];
         const double scale = period * m_period_scale_factor;
@@ -364,7 +368,7 @@ namespace crd_cpp {
 
         phase_type phase;
         energy_type Dnrm;
-        uint parabola_idx;
+        int parabola_idx;
         for (size_t row_number = 0; row_number < m_image_height - 1; row_number++, dataset_row_ptr += m_row_size) {
             Dnrm = max_by_row.at(row_number);
             dataset_period_ptr = dataset_row_ptr;
@@ -374,7 +378,19 @@ namespace crd_cpp {
                 const period_type period = m_periods[period_idx];
                 for (phase = m_first_phase; phase < -m_first_phase; phase++, dataset_tuple_ptr++) {
                     const phase_type real_phase = get_real_phase(phase, period);
-                    const energy_type D = energy_map.at(row_number).at(period_idx).at(real_phase - m_first_phase);
+                    const energy_type D = energy_map.at(row_number).at(period_idx).at((uint) (real_phase - m_first_phase));
+                    /*
+                    if(energy_map.at(row_number).at(period_idx).at(phase - m_first_phase) != D) {
+                        std::cout
+                                << "WAAAAAAAAAAAAAAAAAAAAAAAAAAAA real phase != phase val"
+                                << energy_map.at(row_number).at(period_idx).at(phase - m_first_phase)
+                                << " != "
+                                << D
+                                << std::endl;
+                        phase_type real_phase_ = get_real_phase(phase, period);
+                        std::cout << std::endl;
+                    }
+                     */
 
                     if (Dnrm >= 1.0) {
                         b_val = cv::min((energy_type) (1.0 - (D / Dnrm)), m_maxD);
@@ -437,7 +453,7 @@ namespace crd_cpp {
 
             dataset_period_ptr = dataset_row_ptr;
 
-            for (uint phase_idx = 0; phase_idx < m_nc; phase_idx++, dataset_period_ptr++) {
+            for (int phase_idx = 0; phase_idx < m_nc; phase_idx++, dataset_period_ptr++) {
                 parabola_idx = 0;
                 m_parabola_center[0] = 0;
                 m_intersection_points[0] = -m_maxz;
@@ -497,7 +513,10 @@ namespace crd_cpp {
             const period_type period = m_periods[period_idx];
             for (phase = m_first_phase; phase < -m_first_phase; phase++, dataset_tuple_ptr++) {
                 const phase_type real_phase = get_real_phase(phase, period);
-                const energy_type D = energy_map.at(last_row).at(period_idx).at(real_phase - m_first_phase);
+                if(real_phase - m_first_phase < 0){
+                    std::cout << "WAAAAAAAAAAAAAAAAAAAAAAAAAAAA assert " << real_phase - m_first_phase << " > 0" << std::endl;
+                }
+                const energy_type D = energy_map.at(last_row).at(period_idx).at((uint) real_phase - m_first_phase);
 
                 if (Dnrm >= 1.0) {
                     b_val = cv::min((energy_type) (1.0 - (D / Dnrm)), m_maxD);
@@ -550,29 +569,33 @@ namespace crd_cpp {
         delete[] m_periods;
     }
 
-    Polyfit::Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, int ks) {
+    Polyfit::Polyfit(cv::Mat image,
+                     cv::Mat intensity_map,
+                     std::vector<crd_cpp::old_tuple_type> ground_truth,
+                     cv::Mat &out_img) {
         m_image = image.clone();
         m_image_center = image.cols / 2;
         m_image_height = image.rows;
         m_intensity_map = intensity_map;
         m_crop_row_points = std::vector<cv::Point2f>((size_t) image.rows * 3);
+        m_spammable_img = out_img;
 
         std::reverse(ground_truth.begin(), ground_truth.end());
         fit_poly_on_points(ground_truth);
         calculate_poly_points(); // not really needded
 
-        cv::Size ksize = cv::Size(ks, ks);
-        double sigmaX = 10;
+        cv::Size ksize = cv::Size(0, 0);
+        double sigmaX = 1;
         std::cout << "[plotting] pre blur" << std::endl;
         cv::imshow("post-blurr", intensity_map);
         cv::waitKey(0);
         cv::destroyAllWindows();
 
         cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
-        // cv::medianBlur(intensity_map, intensity_map, 11);
+        cv::GaussianBlur(m_spammable_img, intensity_map, ksize, sigmaX);
 
         std::cout << "[plotting] post blur" << std::endl;
-        cv::imshow("post-blurr", intensity_map);
+        cv::imshow("post-blurr", m_spammable_img);
         cv::waitKey(0);
         cv::destroyAllWindows();
 
@@ -593,7 +616,7 @@ namespace crd_cpp {
         m_options.linear_solver_type = ceres::DENSE_QR;
         m_options.minimizer_progress_to_stdout = true;
 
-        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+        for (int row_num = 0; row_num < m_image_height; row_num++) {
             for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
                 ceres::CostFunction *cost_function = CropRowCostFunctor::Create(new_intensity_map, poly_idx, row_num);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
@@ -619,9 +642,9 @@ namespace crd_cpp {
         int poly_idx;
         ceres::CostFunction *cost_function;
 
-        for (uint row_num = 0; row_num < m_image_height; row_num++) {
-            crop_row_center = m_image_center + points.at(row_num).first;
-            crop_row_period = points.at(row_num).second;
+        for (int row_num = 0; row_num < m_image_height; row_num++) {
+            crop_row_center = m_image_center + points.at((size_t) row_num).first;
+            crop_row_period = points.at((size_t) row_num).second;
             for (poly_idx = -1; poly_idx < 2; poly_idx++) {
                 cost_function = PointResidual::Create(row_num, crop_row_center + poly_idx * crop_row_period, poly_idx);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
@@ -644,9 +667,11 @@ namespace crd_cpp {
 
         int poly_idx;
         ceres::CostFunction *cost_function;
-        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+        const int limit = m_image_height/2;
+        std::cout << "LIMIT: " << limit << std::endl;
+        for (int row_num = 0; row_num < limit; row_num++) {
             for (poly_idx = -1; poly_idx < 2; poly_idx++) {
-                auto p = m_crop_row_points.at(row_num * 3 + (1 + poly_idx));
+                auto p = m_crop_row_points.at((size_t) (row_num * 3 + (1 + poly_idx)));
                 cost_function = PointResidual::Create(p.y, p.x, poly_idx);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
             }
@@ -658,8 +683,7 @@ namespace crd_cpp {
         std::cout << "[plotting]: " << suffix << std::endl;
         cv::Mat img = m_image.clone();
         cv::Scalar_<double> color;
-
-        for (uint image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
+        for (int image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
             for (int poly_idx = -2; poly_idx < 4; poly_idx++) {
                 int column = eval_poly(image_row_num, poly_idx);
 
@@ -669,9 +693,11 @@ namespace crd_cpp {
                     color = cv::Scalar(127, 127, 127);
 
                 cv::circle(img, cv::Point2f(column, m_image_height - image_row_num - 1), 2, color, 1);
+                cv::circle(m_spammable_img, cv::Point2f(column, m_image_height - image_row_num - 1), 2, color, 1);
             }
         }
-        cv::imshow("plot_" + suffix, img);
+        cv::imshow("RGB plot_" + suffix, m_spammable_img);
+        // cv::imshow("plot_" + suffix, img);
         cv::imwrite("plot_" + suffix + ".jpg", img);
         cv::waitKey(DISPLAY_FPS);
     }
@@ -681,18 +707,20 @@ namespace crd_cpp {
         cv::Mat img = m_image.clone();
         for (auto p: m_crop_row_points) {
             cv::circle(img, p, 1, cv::Scalar(255, 0, 0), 1);
+            cv::circle(m_spammable_img, p, 1, cv::Scalar(255, 0, 0), 1);
         }
         cv::imshow("plot_" + suffix, img);
+        cv::imshow("plot_" + suffix, m_spammable_img);
         cv::imwrite("plot_" + suffix + ".jpg", img);
         cv::waitKey(DISPLAY_FPS);
         // cv::destroyWindow("plot_" + suffix);
     }
 
-    const int Polyfit::eval_poly(uint image_row_num, int poly_idx, const double polynomial[5],
+    const int Polyfit::eval_poly(int image_row_num, int poly_idx, const double polynomial[5],
                                  const double perspective_factors[8], const double *poly_period) {
         return (int) eval_poly_double(image_row_num, poly_idx, polynomial, perspective_factors, poly_period);
     }
-    const double Polyfit::eval_poly_double(uint image_row_num, int poly_idx, const double *polynomial,
+    const double Polyfit::eval_poly_double(int image_row_num, int poly_idx, const double *polynomial,
                                            const double *perspective_factors, const double *poly_period) {
         double column;
         double poly_origin = polynomial[4] + *(poly_period) * poly_idx;
@@ -707,7 +735,7 @@ namespace crd_cpp {
         return column;
     }
 
-    int Polyfit::eval_poly(uint image_row_num, int poly_idx) {
+    int Polyfit::eval_poly(int image_row_num, int poly_idx) {
         return eval_poly(image_row_num, poly_idx, m_polynomial, m_perspective_factors, &m_poly_period);
     }
 
@@ -730,10 +758,11 @@ namespace crd_cpp {
     }
 
     void Polyfit::calculate_poly_points() {
-        for (uint row_num = 0; row_num < m_image_height; row_num++) {
+        for (int row_num = 0; row_num < m_image_height; row_num++) {
             for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
                 const int column = eval_poly(row_num, poly_idx);
-                m_crop_row_points.at(row_num * 3 + (1 + poly_idx)) = cv::Point2f(column, row_num);
+                assert(row_num * 3 + (1 + poly_idx) >= 0);
+                m_crop_row_points.at((size_t) (row_num * 3 + (1 + poly_idx))) = cv::Point2f(column, row_num);
             }
         }
     }

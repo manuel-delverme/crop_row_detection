@@ -61,6 +61,7 @@ namespace crd_cpp {
         cv::Mat image = cv::imread(image_path, CV_LOAD_IMAGE_COLOR);
         return process(image);
     }
+
     cv::Mat ImagePreprocessor::process(cv::Mat image) {
             cv::Mat resized_image;
             cv::resize(image, resized_image, m_image_size);
@@ -68,8 +69,7 @@ namespace crd_cpp {
 
             cv::Mat down_ExG_;
             down_ExG_ = cv::Mat::zeros(cv::Size(intensity.cols / 2, intensity.rows / 2), intensity.type());
-
-            //std::cout << intensity.size() << " " << down_ExG_.size() << std::endl;
+            // TODO: improve ExG to become ExBrown if Green>Brown
 
             // Downsampling ottimo
             for (int row = 0; row < intensity.rows / 2; row++) {
@@ -83,7 +83,8 @@ namespace crd_cpp {
                     if (intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2 + 1) > max)
                         max = intensity.at<uchar>((row - 1) * 2 + 1, (column - 1) * 2 + 1);
 
-                    down_ExG_.at<uchar>(row, column) = max;
+                    assert(max <= UCHAR_MAX);
+                    down_ExG_.at<uchar>(row, column) = (uchar) max;
                 }
 
             }

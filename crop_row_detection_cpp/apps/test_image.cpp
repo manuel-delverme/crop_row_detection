@@ -8,57 +8,56 @@
 
 #include <ceres/ceres.h>
 
-int main ( int argc, char **argv )
-{
-  crd_cpp::CropRowDetector row_detector;
-  clock_t start;
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        std::cout << "test_image <path/to/image>" << std::endl;
+    }
+    crd_cpp::CropRowDetector row_detector;
+    clock_t start;
 
-  cv::Size image_size = cv::Size ( 400, 300 );
+    cv::Size image_size = cv::Size(400, 300);
 
-  std::cout << "loading" << std::endl;
-  row_detector.load ( image_size );
-  std::cout << "loaded" << std::endl;
+    std::cout << "loading" << std::endl;
+    row_detector.pre_alloc(image_size);
+    std::cout << "loaded" << std::endl;
 
-  crd_cpp::ImagePreprocessor preprocessor( image_size );
-  std::cout << "preprocessor initd";
+    crd_cpp::ImagePreprocessor preprocessor(image_size);
+    std::cout << "preprocessor initd" << std::endl;
 
-  std::string image_file_name = argv[1];
-  cv::Mat img = cv::imread(image_file_name);
-  
-  // cpp image processing
-  cv::Mat intensityImage = preprocessor.process ( img );
+    std::string image_file_name = argv[1];
+    cv::Mat img = cv::imread(image_file_name);
+    cv::resize(img, img, image_size);
 
-  // templte matching for cpp
-  start = std::clock();
-  row_detector.template_matching ( intensityImage );
-  std::cout << "template_matching time: " << ( std::clock() - start ) / ( double ) ( CLOCKS_PER_SEC / 1000 ) << " ms" << std::endl;
+    // cpp image processing
+    cv::Mat intensityImage = preprocessor.process(img);
 
-  // optimization for cpp
-  start = std::clock();
-  std::cout << "optimization:" << std::endl;
-  auto min_energy_results = row_detector.find_best_parameters ( row_detector.m_energy_map, row_detector.m_best_energy_by_row );
-  std::cout << "best_param time: " << ( std::clock() - start ) / ( double ) ( CLOCKS_PER_SEC / 1000 ) << " ms" << std::endl;
+    // templte matching for cpp
+    start = std::clock();
+    row_detector.template_matching(intensityImage);
+    std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-  // show results for CPP
-  std::cout << "plotting" << std::endl;
-  // dump cpp results
-  crd_cpp::dump_template_matching ( min_energy_results, row_detector.m_image_width, "cpp" );
+    // optimization for cpp
+    start = std::clock();
+    std::cout << "optimization:" << std::endl;
+    auto min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map,
+                                                                row_detector.m_best_energy_by_row);
+    std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
 
-  if ( argc > 2 )
-    crd_cpp::plot_template_matching ( intensityImage, min_energy_results );
+    // show results for CPP
+    std::cout << "plotting" << std::endl;
+    // dump cpp results
+    crd_cpp::dump_template_matching(min_energy_results, row_detector.m_image_width, "cpp");
 
-  std::cout << ">fitting initial guess" << std::endl;
-  crd_cpp::Polyfit polyfit ( img, intensityImage, min_energy_results, 0 );
+    cv::Mat out_image;
+    cv::cvtColor(intensityImage, out_image, cv::COLOR_GRAY2BGR);
+    crd_cpp::plot_template_matching(intensityImage, min_energy_results, out_image);
 
-  std::cout << ">adding noise" << std::endl;
-  // polyfit.add_noise();
+    std::cout << ">fitting initial guess" << std::endl;
+    crd_cpp::Polyfit polyfit(img, intensityImage, min_energy_results, out_image);
 
-  std::cout << ">refitting" << std::endl;
-  polyfit.fit ( img );
+    // teardown cpp
+    std::cout << "teardown" << std::endl;
+    row_detector.teardown();
 
-  // teardown cpp
-  std::cout << "teardown" << std::endl;
-  row_detector.teardown();
-
-  return 0;
+    return 0;
 }

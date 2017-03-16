@@ -48,10 +48,7 @@ namespace crd_cpp {
         }
         csv_stream.close();
     }
-
-    void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<old_tuple_type> &match_results) {
-        cv::Mat temp_image;
-        cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
+    void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<old_tuple_type> &match_results, cv::Mat& temp_image) {
         size_t image_height = (size_t) pIntensityImg.size[0];
         size_t image_width = (size_t) pIntensityImg.size[1];
         old_tuple_type x;
@@ -82,9 +79,9 @@ namespace crd_cpp {
     }
 
 
-    void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<tuple_type> &match_results) {
-        cv::Mat temp_image;
-        cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
+    void plot_template_matching(const cv::Mat &pIntensityImg, std::vector<tuple_type> &match_results, cv::Mat &temp_image) {
+        // cv::Mat temp_image;
+        // cv::cvtColor(pIntensityImg, temp_image, cv::COLOR_GRAY2BGR);
         size_t image_height = (size_t) pIntensityImg.size[0];
         size_t image_width = (size_t) pIntensityImg.size[1];
         old_tuple_type x;
@@ -111,37 +108,5 @@ namespace crd_cpp {
             }
         }
         display_img(temp_image);
-    }
-
-    int main_old(int argc, char **argv) {
-        // if (argc != 2) {
-        //     return -1;
-        // }
-        // std::map<std::string, double> settings; // setup();
-        // settings["a0"] = 1.28;
-        // settings["b0"] = 4.48;
-        // settings["width"] = 400;
-        // settings["m_top_image_col"] = 300;
-        // // settings["d_min"] = 8;
-        // // settings["n_samples_per_octave"] = 70;
-        // // settings["n_octaves"] = 5;
-
-        // cv::Size image_size = cv::Size((uint) settings["width"], (uint) settings["m_top_image_col"]);
-        // ImagePreprocessor preprocessor(argv[1], image_size);
-
-        // CropRowDetector row_detector = CropRowDetector();
-
-        // cv::Mat intensityImg = preprocessor.process("path/to/img");
-
-        // row_detector.load(image_size);
-        // row_detector.template_matching(intensityImg);
-        // std::vector<old_tuple_type> min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
-
-        // plot_template_matching(intensityImg, min_energy_results);
-
-        // row_detector.teardown();
-
-        // std::cout << "done" << std::endl;
-        return 0;
     }
 }

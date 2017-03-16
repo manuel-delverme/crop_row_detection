@@ -27,12 +27,12 @@ namespace crd_cpp {
 
         CropRowDetector();
 
-        void load(cv::Size image_size);
+        void pre_alloc(cv::Size image_size);
 
         void teardown();
 
         inline double CrossCorrelation(
-                const uint row_number,
+                const int row_number,
                 const phase_type phase,
                 const period_idx_type period_idx
         );
@@ -47,10 +47,10 @@ namespace crd_cpp {
         std::vector<std::vector<std::vector<energy_type>>> m_energy_map;
         const period_type m_mind = 8;
         const int m_ndOctaves = 5;
-        const int m_ndSamplesPerOctave = 70;
+        const int m_ndSamplesPerOctave = 30;
         const double m_dstep = std::pow(2.0, 1.0 / (double) m_ndSamplesPerOctave);
-        const uint m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
-        const uint m_nc = (int) floor((double) m_mind * pow(m_dstep, m_nd)) + 1;
+        const int m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
+        const int m_nc = (int) floor((double) m_mind * pow(m_dstep, m_nd)) + 1;
 
         std::vector<std::vector<int>> m_kStarts;
         std::vector<std::vector<int>> m_kEnds;
@@ -65,14 +65,18 @@ namespace crd_cpp {
 
         std::vector<std::vector<double>> m_positive_pulse_centers;
 
-        const uint m_row_size = m_nc * m_nd;
+        const int m_row_size = m_nc * m_nd;
         std::vector<energy_type> m_best_energy_by_row;
 
 
         period_type *m_periods;
         inline const phase_type get_real_phase(const phase_type phase, const period_type period) const {
             const phase_type half_band = (phase_type) floor(period) >> 1;
-            const phase_type real_phase = (uint) (abs(phase + half_band) % (uint) floor(period)) - half_band;
+            // const phase_type real_phase = (abs(phase + half_band) % (phase_type) floor(period)) - half_band;
+            const phase_type shifted_phase = phase + half_band;
+            const uint period_width = (uint) floor(period);
+            const phase_type real_shifted_phase = shifted_phase % period_width;
+            const phase_type real_phase = real_shifted_phase - half_band;
             return real_phase;
         };
         const int m_image_width = 400;
@@ -125,13 +129,13 @@ namespace crd_cpp {
     private:
 
         void draw_crop(const double *polynomial, const double *perspective_factors, const cv::Mat &drawImg_, double x0,
-                       uint image_row_num);
+                       int image_row_num);
 
         void plot_crop_points(std::string suffix);
         void plot_polys(const cv::Mat &inpImg_, const double *polynomial, const double *perspective_factors,
                         double poly_period, const cv::Mat drawImg_, int poly_origin_center, double poly_origin_period);
 
-        int eval_poly(uint image_row_num, int poly_idx);
+        int eval_poly(int image_row_num, int poly_idx);
         void plot_fitted_polys(std::string suffix);
         cv::Mat drawDenseOptFlow(const cv::Mat &flow, const cv::Mat &img, int step, cv::Scalar color, const cv::Mat &mask);
         void fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points);
@@ -140,14 +144,12 @@ namespace crd_cpp {
         void fit_poly_on_image(cv::Mat new_frame);
 
         cv::Mat m_intensity_map;
-        ceres::Solver::Options m_options;
-        ceres::Problem m_problem;
-        ceres::Solver::Summary m_summary;
 
         // initial guess
         double m_polynomial[5] = {0, 0, 0, 0, 0};
         double m_perspective_factors[8] = {.01, .01, .01, .01, .01, .01, .01, .01};
         std::vector<cv::Point2f> m_crop_row_points;
+        cv::Mat m_spammable_img;
         void fit_poly_on_points();
         double m_poly_period = 100;
         int m_image_center;
@@ -155,11 +157,11 @@ namespace crd_cpp {
 
     public:
         cv::Mat m_image;
-        static const int eval_poly(uint image_row_num, int poly_idx, const double m_polynomial[5],
+        static const int eval_poly(int image_row_num, int poly_idx, const double m_polynomial[5],
                                    const double m_perspective_factors[8], const double* m_poly_period);
-        static const double eval_poly_double(uint image_row_num, int poly_idx, const double m_polynomial[5],
+        static const double eval_poly_double(int image_row_num, int poly_idx, const double m_polynomial[5],
                                    const double m_perspective_factors[8], const double* m_poly_period);
-        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, int ksize);
+        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, cv::Mat &out_img);
         void fit(cv::Mat new_frame);
         void add_noise();
     };
