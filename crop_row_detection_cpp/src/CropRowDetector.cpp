@@ -29,7 +29,7 @@ namespace crd_cpp {
             T column;
             T poly_origin = polynomial[4] + *(poly_period) * poly_idx;
             column = (
-                    (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
+                    // (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
                     + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(T(image_row_num), 3)
                     + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(T(image_row_num), 2)
                     + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * T(image_row_num)
@@ -55,29 +55,6 @@ namespace crd_cpp {
             // left + 1 almost always exists
             const double f_right = ((int) image_.at<uchar>(row_number_, left + 1));
             const double loss = f_left + (f_right - f_left) * (x - left);
-
-            /*
-            double complexity = 0;
-            for(int idx = 0; idx < 3; idx++){
-                complexity += std::pow(poly_coeffs[idx],5 - idx);
-            }
-            for(int idx = 0; idx < 3; idx++){
-                complexity += std::pow(prespective_coeff[idx],7 - idx);
-            }
-             */
-            // TODO: epsilon invariant
-            // residuals[0] = -f_left;
-            /*
-            residuals[0] = loss
-                           + 100 * poly_coeffs[0]
-                           + 100 * poly_coeffs[1]
-                           + 100 * poly_coeffs[2]
-                           + 100 * prespective_coeff[0]
-                           + 100 * prespective_coeff[1]
-                           + 100 * prespective_coeff[2]
-                           + 100 * prespective_coeff[3]
-                    ; // + complexity;
-                    */
             residuals[0] = -loss;
             return true;
         }
@@ -379,19 +356,6 @@ namespace crd_cpp {
                 for (phase = m_first_phase; phase < -m_first_phase; phase++, dataset_tuple_ptr++) {
                     const phase_type real_phase = get_real_phase(phase, period);
                     const energy_type D = energy_map.at(row_number).at(period_idx).at((uint) (real_phase - m_first_phase));
-                    /*
-                    if(energy_map.at(row_number).at(period_idx).at(phase - m_first_phase) != D) {
-                        std::cout
-                                << "WAAAAAAAAAAAAAAAAAAAAAAAAAAAA real phase != phase val"
-                                << energy_map.at(row_number).at(period_idx).at(phase - m_first_phase)
-                                << " != "
-                                << D
-                                << std::endl;
-                        phase_type real_phase_ = get_real_phase(phase, period);
-                        std::cout << std::endl;
-                    }
-                     */
-
                     if (Dnrm >= 1.0) {
                         b_val = cv::min((energy_type) (1.0 - (D / Dnrm)), m_maxD);
                     } else {
@@ -499,7 +463,6 @@ namespace crd_cpp {
                     dataset_tuple_ptr->c = dataset_period_ptr[m_nc * new_period_idx].c;
                     dataset_tuple_ptr->d = (period_idx_type) new_period_idx;
                 }
-                // std::cin >> parabola_idx;
             }
         }
         // last row is a special case
@@ -609,10 +572,8 @@ namespace crd_cpp {
         ceres::Solver::Summary m_summary;
 
         m_options.max_num_iterations = 100;
-        // m_options.function_tolerance = 1e-14;
-        // m_options.parameter_tolerance = 1e-14;
-        m_options.function_tolerance = 1e-100;
-        m_options.parameter_tolerance = 1e-100;
+        m_options.function_tolerance = 1e-14;
+        m_options.parameter_tolerance = 1e-14;
         m_options.linear_solver_type = ceres::DENSE_QR;
         m_options.minimizer_progress_to_stdout = true;
 
@@ -725,7 +686,7 @@ namespace crd_cpp {
         double column;
         double poly_origin = polynomial[4] + *(poly_period) * poly_idx;
         column = (
-                  (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
+                  // (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
                 + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3)
                 + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2)
                 + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * image_row_num

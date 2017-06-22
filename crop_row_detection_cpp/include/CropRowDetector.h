@@ -14,7 +14,7 @@ namespace crd_cpp {
     typedef double energy_type;
     typedef std::pair<phase_type, period_type> old_tuple_type;
     typedef std::pair<phase_type, size_t> tuple_type;
-    typedef std::vector<std::vector<std::vector<energy_type>>> energy_map_type;
+    typedef std::vector<std::vector<std::vector<energy_type> > > energy_map_type;
 
     struct data_type {
         energy_type tuple_value;
@@ -44,7 +44,7 @@ namespace crd_cpp {
 
         void template_matching(cv::Mat intensity_map);
 
-        std::vector<std::vector<std::vector<energy_type>>> m_energy_map;
+        std::vector<std::vector<std::vector<energy_type> > > m_energy_map;
         const period_type m_mind = 8;
         const int m_ndOctaves = 5;
         const int m_ndSamplesPerOctave = 30;
@@ -52,18 +52,18 @@ namespace crd_cpp {
         const int m_nd = m_ndOctaves * m_ndSamplesPerOctave + 1;
         const int m_nc = (int) floor((double) m_mind * pow(m_dstep, m_nd)) + 1;
 
-        std::vector<std::vector<int>> m_kStarts;
-        std::vector<std::vector<int>> m_kEnds;
+        std::vector<std::vector<int> > m_kStarts;
+        std::vector<std::vector<int> > m_kEnds;
         // std::vector<double> m_period_scale(m_nd);
 
-        std::vector<std::vector<int>> m_positive_pulse_start;
-        std::vector<std::vector<int>> m_positive_pulse_end;
-        std::vector<std::vector<int>> m_negative_pulse_start;
-        std::vector<std::vector<int>> m_negative_pulse_end;
+        std::vector<std::vector<int> > m_positive_pulse_start;
+        std::vector<std::vector<int> > m_positive_pulse_end;
+        std::vector<std::vector<int> > m_negative_pulse_start;
+        std::vector<std::vector<int> > m_negative_pulse_end;
         std::vector<double> m_xcorr_a;
         std::vector<double> m_xcorr_b;
 
-        std::vector<std::vector<double>> m_positive_pulse_centers;
+        std::vector<std::vector<double> > m_positive_pulse_centers;
 
         const int m_row_size = m_nc * m_nd;
         std::vector<energy_type> m_best_energy_by_row;
@@ -71,6 +71,7 @@ namespace crd_cpp {
 
         period_type *m_periods;
         inline const phase_type get_real_phase(const phase_type phase, const period_type period) const {
+            return phase;
             const phase_type half_band = (phase_type) floor(period) >> 1;
             // const phase_type real_phase = (abs(phase + half_band) % (phase_type) floor(period)) - half_band;
             const phase_type shifted_phase = phase + half_band;
@@ -113,13 +114,13 @@ namespace crd_cpp {
 
         void distance_transform_period(data_type *dataset_row_ptr) const;
 
-        void calculate_energy_integral(const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
+        void calculate_energy_integral(const std::vector<std::vector<std::vector<energy_type> > > &energy_map,
                                        const std::vector<energy_type> &max_by_row, size_t row_number,
                                        data_type *dataset_row_ptr) const;
 
         old_tuple_type find_row_max(data_type *&dataset_row_ptr, data_type *&pBestNode) const;
 
-        void integrate_row(const std::vector<std::vector<std::vector<energy_type>>> &energy_map,
+        void integrate_row(const std::vector<std::vector<std::vector<energy_type> > > &energy_map,
                            energy_type Dnrm, data_type *dataset_row_ptr) const;
 
         inline const period_idx_type period_min(const phase_type phase, const period_type *periods) const;
