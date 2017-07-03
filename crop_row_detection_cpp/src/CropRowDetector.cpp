@@ -1,10 +1,10 @@
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 #include <cmath>
 #include <opencv2/opencv.hpp>
 #include <ceres/ceres.h>
 #include "CropRowDetector.h"
-#include <boost/scoped_ptr.hpp>
 
 int DISPLAY_FPS = 0; // 1000/60;
 
@@ -19,17 +19,17 @@ namespace crd_cpp {
         bool operator()(const T *poly_coeff, const T *perspective_coeff, const T *poly_period, T *residual) const {
             residual[0] = T(target_column)
                           - eval_poly_double(row_num_, poly_idx_, poly_coeff, perspective_coeff, poly_period);
-            // residual[0] = std::min(residual[0], 10);
             return true;
         }
     public:
         template<typename T>
         const T eval_poly_double(double image_row_num, double poly_idx, const T *polynomial,
                                                const T *perspective_factors, const T *poly_period) const {
+            image_row_num = 300 - image_row_num;
             T column;
             T poly_origin = polynomial[4] + *(poly_period) * poly_idx;
             column = (
-                    // (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
+                    (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
                     + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(T(image_row_num), 3)
                     + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(T(image_row_num), 2)
                     + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * T(image_row_num)
@@ -45,22 +45,51 @@ namespace crd_cpp {
         double poly_idx_;
     };
 
+    class OverlapCostFunction {
+    public:
+        bool operator()(const double *poly_coeffs, const double *prespective_coeff,
+                        const double *poly_period, double *residuals) const {
+            double x0 = Polyfit::eval_poly_double(row_number_, -1, poly_coeffs, prespective_coeff, poly_period);
+            double x1 = Polyfit::eval_poly_double(row_number_, 0, poly_coeffs, prespective_coeff, poly_period);
+            double x2 = Polyfit::eval_poly_double(row_number_, +1, poly_coeffs, prespective_coeff, poly_period);
+            residuals[0] = (pow((*poly_period - (x1-x0)),2) + pow(*poly_period - (x2-x1), 2));
+            residuals[0] /= (prespective_coeff[7]) * poly_coeffs[3] * row_number_;
+            // std::cout << residuals[0] << std::endl;
+            return true;
+        }
+
+        static ceres::CostFunction *Create(int row_number) {
+            return new ceres::NumericDiffCostFunction<OverlapCostFunction, ceres::RIDDERS, 1, 5, 8, 1>(
+                    new OverlapCostFunction(row_number));
+        }
+    private:
+        OverlapCostFunction(int row_number) :
+                row_number_(row_number) {}
+
+        int row_number_;
+    };
+
     class CropRowCostFunctor {
     public:
         bool operator()(const double *poly_coeffs, const double *prespective_coeff,
                         const double *poly_period, double *residuals) const {
             const double x = Polyfit::eval_poly_double(row_number_, poly_idx_, poly_coeffs, prespective_coeff, poly_period);
-            const int left = (const int) std::floor(x);
-            const double f_left = ((int) image_.at<uchar>(row_number_, left));
-            // left + 1 almost always exists
-            const double f_right = ((int) image_.at<uchar>(row_number_, left + 1));
-            const double loss = f_left + (f_right - f_left) * (x - left);
-            residuals[0] = -loss;
+            if(x < 0 || x > 398){
+                residuals[0] = 1e5;
+                // std::cout << "BUGG" << x << std::endl;
+            } else {
+                const int left = (const int) std::floor(x);
+                const double f_left = ((int) image_.at<uchar>(row_number_, left));
+                const double f_right = ((int) image_.at<uchar>(row_number_, left + 1));
+
+                const double loss = f_left + (f_right - f_left) * (x - left);
+                residuals[0] = -loss;
+            }
             return true;
         }
 
         static ceres::CostFunction *Create(const cv::Mat image, int poly_idx, int row_number) {
-            return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, 5, 8, 1>(
+            return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::RIDDERS, 1, 5, 8, 1>(
                     new CropRowCostFunctor(image, poly_idx, row_number));
         }
 
@@ -543,49 +572,148 @@ namespace crd_cpp {
         m_crop_row_points = std::vector<cv::Point2f>((size_t) image.rows * 3);
         m_spammable_img = out_img;
 
+        std::cout << "ping" << std::endl;
         std::reverse(ground_truth.begin(), ground_truth.end());
+        std::cout << "ping" << std::endl;
         fit_poly_on_points(ground_truth);
+        std::cout << "ping" << std::endl;
         calculate_poly_points(); // not really needded
 
-        cv::Size ksize = cv::Size(0, 0);
-        double sigmaX = 1;
+        cv::Size ksize = cv::Size(11, 1);
+        double sigmaX = 0;
+        /*
         std::cout << "[plotting] pre blur" << std::endl;
-        cv::imshow("post-blurr", intensity_map);
+        cv::imshow("pre-blur", intensity_map);
         cv::waitKey(0);
         cv::destroyAllWindows();
+        */
 
         cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
         cv::GaussianBlur(m_spammable_img, intensity_map, ksize, sigmaX);
 
+        /*
         std::cout << "[plotting] post blur" << std::endl;
-        cv::imshow("post-blurr", m_spammable_img);
+        cv::imshow("post-blurr", intensity_map);
         cv::waitKey(0);
         cv::destroyAllWindows();
+        */
 
         plot_fitted_polys("initial fit");
-        fit_poly_on_image(intensity_map);
-        plot_fitted_polys("imap fit");
+        for(int i=0; i < 50; i++){
+            std::cout << "iter" << i << std::endl;
+            fit_poly_on_image(intensity_map);
+            plot_fitted_polys("imap fit" + std::to_string(i));
+        }
+
+        /*
+        for(double stddev = 1e-9; stddev < 0.01; stddev*=2){
+            std::cout << "STD: " << stddev << std::endl;
+            add_noise_to_polys(stddev);
+            plot_fitted_polys("post noise");
+            fit_poly_on_image(intensity_map);
+            plot_fitted_polys("noise imap fit");
+        }
+        */
     }
     void Polyfit::fit_poly_on_image(cv::Mat new_intensity_map) {
-        ceres::Solver::Options m_options;
-        ceres::Problem m_problem;
-        ceres::Solver::Summary m_summary;
+        int max_num_iterations = 1;
+        double function_tolerance = 1e-50;
+        double parameter_tolerance = 1e-9;
+        const double kRelativeStepSize = 1e-6;
+        double lr = 1e-8;
 
-        m_options.max_num_iterations = 100;
-        m_options.function_tolerance = 1e-14;
-        m_options.parameter_tolerance = 1e-14;
-        m_options.linear_solver_type = ceres::DENSE_QR;
-        m_options.minimizer_progress_to_stdout = true;
+        for (int iter_number = 0; iter_number < max_num_iterations; iter_number++) {
+            double poly[5];
+            double perspect[8];
+            double period;
+            double jac_polynomial[5];
+            double jac_perspective_factors[8];
+            double jac_period;
 
-        for (int row_num = 0; row_num < m_image_height; row_num++) {
-            for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
-                ceres::CostFunction *cost_function = CropRowCostFunctor::Create(new_intensity_map, poly_idx, row_num);
-                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+            // save the old params
+            for (int idx = 0; idx < 5; idx++) poly[idx] = m_polynomial[idx];
+            for (int idx = 0; idx < 8; idx++) perspect[idx] = m_perspective_factors[idx];
+            period = m_poly_period;
+
+            double fx = eval_poly_loss(poly, perspect, period);
+
+            cv::imshow("plot_", m_intensity_map);
+            cv::waitKey(0);
+
+            // jacobians
+            for (int idx = 0; idx < 5; idx++) {
+                if(4 - idx > 1) continue;
+                // const double h = std::abs(poly[idx]) * kRelativeStepSize;
+                const double h = pow(1.0/300.0, (5 - idx));
+                poly[idx] += h;
+                double fxh = eval_poly_loss(poly, perspect, period);
+                poly[idx] -= h;
+
+                if(fxh - fx > 0){ // if h increase the loss
+                    jac_polynomial[idx] = -h; // step back
+                } else{
+                    jac_polynomial[idx] = h; // go along h
+                }
+                // std::cout << "jac poly " << idx << ":" << jac_polynomial[idx] << std::endl;
             }
+            /*
+
+            for (int idx = 0; idx < 8; idx++) {
+                const double h = std::abs(perspect[idx]) * kRelativeStepSize;
+                perspect[idx] += h;
+                double fxh = eval_poly_loss(poly, perspect, period);
+                perspect[idx] -= h;
+                jac_perspective_factors[idx] = (fxh - fx) / h;
+                // std::cout << "jac perspect " << idx << ":" << jac_perspective_factors[idx] << std::endl;
+            }
+            {
+                const double h = std::abs(period) * kRelativeStepSize;
+                period += h;
+                double fxh = eval_poly_loss(poly, perspect, period);
+                period -= h;
+                jac_period = (fxh - fx) / h;
+                // std::cout << "jac period: " << period << std::endl;
+            }
+             */
+
+            // apply jacobians
+            for (int idx = 1; idx < 5; idx++){
+                if(4 - idx > 1) continue;
+                double update = jac_polynomial[idx]; // / pow(300.0, 5 - idx);
+                std::cout << "poly" << (4 - idx) << " was: " << m_polynomial[idx] << "-= " << update << std::endl;
+                m_polynomial[idx] += update;
+            }
+            // for (int idx = 0; idx < 8; idx++) m_perspective_factors[idx] -= lr * jac_perspective_factors[idx];
+
+            // std::cout << "period was: " << m_poly_period << "-= " << lr * jac_period << std::endl;
+            // m_poly_period -= lr * jac_period;
+
+
+            std::cout << "cost: " << eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period) << std::endl;
         }
-        ceres::Solve(m_options, &m_problem, &m_summary);
-        std::cout << m_summary.FullReport() << std::endl;
-        std::cout << "solved" << std::endl;
+
+    }
+
+    double Polyfit::eval_poly_loss(const double *poly, const double *perspect, const double period) {
+        double cost = 0;
+        for (int row_num = 0; row_num < this->m_image_height; row_num++) {
+                for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
+                    const double x = eval_poly_double(row_num, poly_idx, poly, perspect, &period);
+                    if(x < 0 || x > 398){
+                        cost += INFINITY;
+                    } else {
+                        const int left = (const int) floor(x);
+                        const double f_left = ((int) m_intensity_map.at<uchar>(row_num, left));
+                        m_intensity_map.at<uchar>(row_num, left) = 0;
+                        // const double f_right = ((int) m_intensity_map.at<uchar>(row_num, left + 1));
+
+                        // const double loss = f_left + (f_right - f_left) * (x - left);
+                        // cost += -loss;
+                        cost = f_left;
+                    }
+                }
+            }
+        return cost;
     }
 
     void Polyfit::fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points) {
@@ -628,9 +756,7 @@ namespace crd_cpp {
 
         int poly_idx;
         ceres::CostFunction *cost_function;
-        const int limit = m_image_height/2;
-        std::cout << "LIMIT: " << limit << std::endl;
-        for (int row_num = 0; row_num < limit; row_num++) {
+        for (int row_num = 0; row_num < m_image_height; row_num++) {
             for (poly_idx = -1; poly_idx < 2; poly_idx++) {
                 auto p = m_crop_row_points.at((size_t) (row_num * 3 + (1 + poly_idx)));
                 cost_function = PointResidual::Create(p.y, p.x, poly_idx);
@@ -638,6 +764,19 @@ namespace crd_cpp {
             }
         }
         ceres::Solve(m_options, &m_problem, &m_summary);
+    }
+
+    void Polyfit::add_noise_to_polys(double std) {
+        std::default_random_engine generator;
+        std::normal_distribution<double> distribution(0.0, std);
+        for (int idx = 0; idx < 5; idx++) {
+            double number = distribution(generator);
+            m_polynomial[idx] += number/(1+idx);
+        }
+        m_poly_period += distribution(generator);
+        for (int idx = 0; idx < 8; idx++) {
+            m_perspective_factors[idx] += distribution(generator)/(1+idx);
+        }
     }
 
     void Polyfit::plot_fitted_polys(std::string suffix) {
@@ -657,10 +796,12 @@ namespace crd_cpp {
                 cv::circle(m_spammable_img, cv::Point2f(column, m_image_height - image_row_num - 1), 2, color, 1);
             }
         }
-        cv::imshow("RGB plot_" + suffix, m_spammable_img);
+        // cv::imshow("RGB plot_" + suffix, img);
+
         // cv::imshow("plot_" + suffix, img);
-        cv::imwrite("plot_" + suffix + ".jpg", img);
-        cv::waitKey(DISPLAY_FPS);
+        cv::imwrite("plot_" + suffix + ".jpg", m_spammable_img);
+        // cv::waitKey(DISPLAY_FPS);
+        // cv::destroyAllWindows();
     }
 
     void Polyfit::plot_crop_points(std::string suffix) {
@@ -686,7 +827,7 @@ namespace crd_cpp {
         double column;
         double poly_origin = polynomial[4] + *(poly_period) * poly_idx;
         column = (
-                  // (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
+                (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
                 + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3)
                 + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2)
                 + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * image_row_num
@@ -715,7 +856,6 @@ namespace crd_cpp {
         m_intensity_map = new_frame;
         fit_poly_on_image(new_frame);
         plot_fitted_polys("fit on intensity map");
-
     }
 
     void Polyfit::calculate_poly_points() {
