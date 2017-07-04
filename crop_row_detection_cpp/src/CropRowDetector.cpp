@@ -586,43 +586,42 @@ namespace crd_cpp {
         cv::imshow("pre-blur", intensity_map);
         cv::waitKey(0);
         cv::destroyAllWindows();
-        */
+         */
 
-        cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
-        cv::GaussianBlur(m_spammable_img, intensity_map, ksize, sigmaX);
+        // cv::GaussianBlur(m_spammable_img, m_intensity_map, ksize, sigmaX);
+        // cv::GaussianBlur(m_intensity_map, m_intensity_map, ksize, sigmaX);
+        // cv::normalize(m_intensity_map, m_intensity_map, 1.0, 0.0, cv::NORM_MINMAX);
 
         /*
         std::cout << "[plotting] post blur" << std::endl;
-        cv::imshow("post-blurr", intensity_map);
+        cv::imshow("post-blurr", m_intensity_map);
         cv::waitKey(0);
         cv::destroyAllWindows();
-        */
+         */
 
         plot_fitted_polys("initial fit");
-        for(int i=0; i < 50; i++){
+        for(int i=0; i < 1; i++){
             std::cout << "iter" << i << std::endl;
-            fit_poly_on_image(intensity_map);
+            fit_poly_on_image();
             plot_fitted_polys("imap fit" + std::to_string(i));
         }
-
-        /*
-        for(double stddev = 1e-9; stddev < 0.01; stddev*=2){
-            std::cout << "STD: " << stddev << std::endl;
-            add_noise_to_polys(stddev);
-            plot_fitted_polys("post noise");
-            fit_poly_on_image(intensity_map);
-            plot_fitted_polys("noise imap fit");
-        }
-        */
     }
-    void Polyfit::fit_poly_on_image(cv::Mat new_intensity_map) {
-        int max_num_iterations = 1;
-        double function_tolerance = 1e-50;
+    void Polyfit::fit_poly_on_image() {
+        int max_num_iterations = 99999;
+        double function_tolerance = 1e-5;
         double parameter_tolerance = 1e-9;
         const double kRelativeStepSize = 1e-6;
-        double lr = 1e-8;
+        double initial_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period);
+        double learning_rate[5];
+        double learning_rate_persp[8];
+        double learning_rate_period = 1;
+        double cost;
+        double old_cost = initial_loss;
+        for (int idx = 0; idx < 5; idx++) learning_rate[idx] = 1e-5;
+        for (int idx = 0; idx < 8; idx++) learning_rate_persp[idx] = 1e-5;
 
         for (int iter_number = 0; iter_number < max_num_iterations; iter_number++) {
+            bool failed_update = false;
             double poly[5];
             double perspect[8];
             double period;
@@ -637,27 +636,25 @@ namespace crd_cpp {
 
             double fx = eval_poly_loss(poly, perspect, period);
 
-            cv::imshow("plot_", m_intensity_map);
-            cv::waitKey(0);
-
             // jacobians
             for (int idx = 0; idx < 5; idx++) {
-                if(4 - idx > 1) continue;
+                // if(4 - idx > 1) continue;
                 // const double h = std::abs(poly[idx]) * kRelativeStepSize;
                 const double h = pow(1.0/300.0, (5 - idx));
                 poly[idx] += h;
                 double fxh = eval_poly_loss(poly, perspect, period);
                 poly[idx] -= h;
 
+                /*
                 if(fxh - fx > 0){ // if h increase the loss
                     jac_polynomial[idx] = -h; // step back
                 } else{
                     jac_polynomial[idx] = h; // go along h
                 }
+                */
+                jac_polynomial[idx] = ((fx - fxh) / h);
                 // std::cout << "jac poly " << idx << ":" << jac_polynomial[idx] << std::endl;
             }
-            /*
-
             for (int idx = 0; idx < 8; idx++) {
                 const double h = std::abs(perspect[idx]) * kRelativeStepSize;
                 perspect[idx] += h;
@@ -674,45 +671,72 @@ namespace crd_cpp {
                 jac_period = (fxh - fx) / h;
                 // std::cout << "jac period: " << period << std::endl;
             }
-             */
+
+            const double old_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period);
 
             // apply jacobians
             for (int idx = 1; idx < 5; idx++){
-                if(4 - idx > 1) continue;
-                double update = jac_polynomial[idx]; // / pow(300.0, 5 - idx);
-                std::cout << "poly" << (4 - idx) << " was: " << m_polynomial[idx] << "-= " << update << std::endl;
-                m_polynomial[idx] += update;
+                m_polynomial[idx] += learning_rate[idx] * jac_polynomial[idx];
+                const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period);
+                if(new_loss > old_loss){
+                    m_polynomial[idx] -= learning_rate[idx] * jac_polynomial[idx];
+                    learning_rate[idx] /= 2;
+                    // std::cout << new_loss << " > " << old_loss << " reducing lr " << idx << " to " << learning_rate[idx] << std::endl;
+                    std::cout << idx << " is_bad; failed update " << std::endl;
+                    failed_update = true;
+                }
             }
-            // for (int idx = 0; idx < 8; idx++) m_perspective_factors[idx] -= lr * jac_perspective_factors[idx];
+            for (int idx = 0; idx < 8; idx++){
+                m_perspective_factors[idx] += learning_rate_persp[idx] * jac_perspective_factors[idx];
+                const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period);
+                if(new_loss > old_loss){
+                    m_perspective_factors[idx] -= learning_rate_persp[idx] * jac_perspective_factors[idx];
+                    learning_rate_persp[idx] /= 2;
+                    std::cout << new_loss << " > " << old_loss << " reducing lr_persp " << idx << " to " << learning_rate_persp[idx] << std::endl;
+                    failed_update = true;
+                }
+            }
+            m_poly_period += learning_rate_period * jac_period;
+            const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period);
+            if(new_loss > old_loss) {
+                m_poly_period -= learning_rate_period * jac_period;
+                learning_rate_period /= 2;
+                std::cout << new_loss << " > " << old_loss << " reducing lr_period to " << learning_rate_period << std::endl;
+                failed_update = true;
+            }
 
-            // std::cout << "period was: " << m_poly_period << "-= " << lr * jac_period << std::endl;
-            // m_poly_period -= lr * jac_period;
 
-
-            std::cout << "cost: " << eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period) << std::endl;
+            cost = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period);
+            const double saving = old_cost - cost ;
+            std::cout << "cost: " << cost << " saved " << saving << std::endl;
+            if(saving < function_tolerance && !failed_update)
+                break;
+            old_cost = cost;
         }
-
+        double final_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period);
+        std::cout << "diff: " << final_loss - initial_loss << std::endl;
     }
 
     double Polyfit::eval_poly_loss(const double *poly, const double *perspect, const double period) {
         double cost = 0;
         for (int row_num = 0; row_num < this->m_image_height; row_num++) {
-                for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
-                    const double x = eval_poly_double(row_num, poly_idx, poly, perspect, &period);
-                    if(x < 0 || x > 398){
-                        cost += INFINITY;
-                    } else {
-                        const int left = (const int) floor(x);
-                        const double f_left = ((int) m_intensity_map.at<uchar>(row_num, left));
-                        m_intensity_map.at<uchar>(row_num, left) = 0;
-                        // const double f_right = ((int) m_intensity_map.at<uchar>(row_num, left + 1));
+            for (int poly_idx = -1; poly_idx < 2; poly_idx++) {
+                const double column = eval_poly_double(row_num, poly_idx, poly, perspect, &period);
+                if(column < 0 || column > 398 || isnan(column)){
+                    cost += 9999;
+                } else {
+                    const int left = (const int) floor(column);
+                    const double f_left = ((int) m_intensity_map.at<uchar>(row_num, left));
+                    // m_intensity_map.at<uchar>(row_num, left) = 0;
 
-                        // const double loss = f_left + (f_right - f_left) * (x - left);
-                        // cost += -loss;
-                        cost = f_left;
-                    }
+                    const double f_right = ((int) m_intensity_map.at<uchar>(row_num, left + 1));
+
+                    const double intensity = f_left + (f_right - f_left) * (column - left);
+                    cost += -intensity;
+                    // cost += f_left;
                 }
             }
+        }
         return cost;
     }
 
@@ -730,12 +754,15 @@ namespace crd_cpp {
         period_type crop_row_center, crop_row_period;
         int poly_idx;
         ceres::CostFunction *cost_function;
+        std::default_random_engine generator;
+        std::normal_distribution<double> distribution(5.0, 5.1);
 
         for (int row_num = 0; row_num < m_image_height; row_num++) {
             crop_row_center = m_image_center + points.at((size_t) row_num).first;
             crop_row_period = points.at((size_t) row_num).second;
             for (poly_idx = -1; poly_idx < 2; poly_idx++) {
-                cost_function = PointResidual::Create(row_num, crop_row_center + poly_idx * crop_row_period, poly_idx);
+                // cost_function = PointResidual::Create(row_num, crop_row_center + poly_idx * crop_row_period, poly_idx);
+                cost_function = PointResidual::Create(row_num, crop_row_center + poly_idx * crop_row_period + distribution(generator), poly_idx);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
             }
         }
@@ -756,10 +783,12 @@ namespace crd_cpp {
 
         int poly_idx;
         ceres::CostFunction *cost_function;
+        std::default_random_engine generator;
+        std::normal_distribution<double> distribution(5.0, 5.1);
         for (int row_num = 0; row_num < m_image_height; row_num++) {
             for (poly_idx = -1; poly_idx < 2; poly_idx++) {
                 auto p = m_crop_row_points.at((size_t) (row_num * 3 + (1 + poly_idx)));
-                cost_function = PointResidual::Create(p.y, p.x, poly_idx);
+                cost_function = PointResidual::Create(p.y + distribution(generator), p.x + distribution(generator), poly_idx);
                 m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
             }
         }
@@ -783,6 +812,7 @@ namespace crd_cpp {
         std::cout << "[plotting]: " << suffix << std::endl;
         cv::Mat img = m_image.clone();
         cv::Scalar_<double> color;
+
         for (int image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
             for (int poly_idx = -2; poly_idx < 4; poly_idx++) {
                 int column = eval_poly(image_row_num, poly_idx);
@@ -792,14 +822,15 @@ namespace crd_cpp {
                 else
                     color = cv::Scalar(127, 127, 127);
 
-                cv::circle(img, cv::Point2f(column, m_image_height - image_row_num - 1), 2, color, 1);
-                cv::circle(m_spammable_img, cv::Point2f(column, m_image_height - image_row_num - 1), 2, color, 1);
+                cv::circle(img, cv::Point2f(column, image_row_num), 2, color, 1);
+                // cv::circle(m_spammable_img, cv::Point2f(column, image_row_num), 2, color, 1);
             }
         }
         // cv::imshow("RGB plot_" + suffix, img);
 
         // cv::imshow("plot_" + suffix, img);
-        cv::imwrite("plot_" + suffix + ".jpg", m_spammable_img);
+        cv::imwrite("plot_" + suffix + ".jpg", img);
+        // cv::imwrite("plot_" + suffix + ".jpg", m_spammable_img);
         // cv::waitKey(DISPLAY_FPS);
         // cv::destroyAllWindows();
     }
@@ -854,7 +885,7 @@ namespace crd_cpp {
         // plot_fitted_polys("fit post opt flow effect");
 
         m_intensity_map = new_frame;
-        fit_poly_on_image(new_frame);
+        fit_poly_on_image();
         plot_fitted_polys("fit on intensity map");
     }
 

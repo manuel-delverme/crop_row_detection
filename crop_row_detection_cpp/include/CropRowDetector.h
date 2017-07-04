@@ -140,19 +140,26 @@ namespace crd_cpp {
         void plot_fitted_polys(std::string suffix);
         cv::Mat drawDenseOptFlow(const cv::Mat &flow, const cv::Mat &img, int step, cv::Scalar color, const cv::Mat &mask);
         void fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points);
+        void add_noise_to_polys(double std);
         cv::Mat calculate_flow(const cv::Mat &new_frame);
         void calculate_poly_points();
-        void fit_poly_on_image(cv::Mat new_frame);
+        void fit_poly_on_image();
+        double eval_poly_loss(const double *poly, const double *perspect, const double period);
 
         cv::Mat m_intensity_map;
 
         // initial guess
         double m_polynomial[5] = {0, 0, 0, 0, 0};
         double m_perspective_factors[8] = {.01, .01, .01, .01, .01, .01, .01, .01};
+        double m_poly_period = 100;
+
+        double m_best_polynomial[5] = {0, 0, 0, 0, 0};
+        double m_best_perspective_factors[8] = {.01, .01, .01, .01, .01, .01, .01, .01};
+        double m_best_poly_period = 100;
+
         std::vector<cv::Point2f> m_crop_row_points;
         cv::Mat m_spammable_img;
         void fit_poly_on_points();
-        double m_poly_period = 100;
         int m_image_center;
         int m_image_height;
 

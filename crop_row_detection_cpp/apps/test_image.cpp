@@ -46,11 +46,11 @@ int main(int argc, char **argv) {
     // show results for CPP
     std::cout << "plotting" << std::endl;
     // dump cpp results
-    crd_cpp::dump_template_matching(min_energy_results, row_detector.m_image_width, "cpp");
+    // crd_cpp::dump_template_matching(min_energy_results, row_detector.m_image_width, "cpp");
 
     cv::Mat out_image;
     cv::cvtColor(intensityImage, out_image, cv::COLOR_GRAY2BGR);
-    crd_cpp::plot_template_matching(intensityImage, min_energy_results, out_image);
+    // crd_cpp::plot_template_matching(intensityImage, min_energy_results, out_image);
 
     std::cout << ">fitting initial guess" << std::endl;
     crd_cpp::Polyfit polyfit(img, intensityImage, min_energy_results, out_image);
