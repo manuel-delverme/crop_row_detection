@@ -144,7 +144,7 @@ namespace crd_cpp {
         cv::Mat calculate_flow(const cv::Mat &new_frame);
         void calculate_poly_points();
         void fit_poly_on_image();
-        double eval_poly_loss(const double *poly, const double *perspect, const double period);
+        double eval_poly_loss(const double *poly, const double *perspect, const double period, const int margin);
 
         cv::Mat m_intensity_map;
 
@@ -162,6 +162,7 @@ namespace crd_cpp {
         void fit_poly_on_points();
         int m_image_center;
         int m_image_height;
+        double m_mean;
 
     public:
         cv::Mat m_image;

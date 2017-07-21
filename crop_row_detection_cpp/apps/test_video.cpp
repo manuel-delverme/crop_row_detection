@@ -30,38 +30,23 @@ int main ( int argc, char **argv )
 
     capture >> video_image;
     std::cout << "fitting initial guess" << std::endl;
-    intensityImage = preprocessor.process (video_image );
+    // resize image?
+    intensityImage = preprocessor.process(video_image);
+
     crd_cpp::Polyfit polyfit ( video_image, intensityImage, min_energy_results);
 
-    while ( capture.isOpened() )
+    // cv::Mat img = cv::imread(image_file_name);
+    // cv::resize(img, img, image_size);
+    // cv::Mat intensityImage = preprocessor.process(img);
+
+    while(capture.isOpened())
     {
         capture >> video_image;
-        // cpp image processing
-        intensityImage = preprocessor.process (video_image );
-
-        // templte matching for cpp
-        start = std::clock();
-        row_detector.template_matching ( intensityImage );
-        std::cout << "template_matching time: " << ( std::clock() - start ) / ( double ) ( CLOCKS_PER_SEC / 1000 ) << " ms" << std::endl;
-
-        // optimization for cpp
-        start = std::clock();
-        std::cout << "optimization:" << std::endl;
-        min_energy_results = row_detector.find_best_parameters (row_detector.m_energy_map, row_detector.m_best_energy_by_row );
-        std::cout << "best_param time: " << ( std::clock() - start ) / ( double ) ( CLOCKS_PER_SEC / 1000 ) << " ms" << std::endl;
-
-        if ( argc > 2 )
-            // show results for CPP
-            std::cout << "plotting" << std::endl;
-            crd_cpp::plot_template_matching ( intensityImage, min_energy_results );
-
-        std::cout << ">refitting" << std::endl;
-        polyfit.fit ( video_image );
+        intensityImage = preprocessor.process (video_image);
+        polyfit.fit (video_image);
     }
-
-    // teardown cpp
+    // teardown cp
     std::cout << "teardown" << std::endl;
     row_detector.teardown();
-
     return 0;
 }
