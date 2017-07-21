@@ -566,7 +566,7 @@ namespace crd_cpp {
         const double kRelativeStepSize = 1e-6;
         int batch_size = 30;
 
-        double initial_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
+        double initial_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 0);
 
         const double lr = 1e-1;
         double learning_rate[5] = {
@@ -584,7 +584,6 @@ namespace crd_cpp {
         learning_rate_persp[0] = 0;
         learning_rate_persp[1] = 0;
 
-
         double cost;
         double old_cost = initial_loss;
         int useless_iterations = 0;
@@ -595,11 +594,9 @@ namespace crd_cpp {
             double poly[5];
             double perspect[8];
             double period;
-            int margin;
             double jac_polynomial[5];
             double jac_perspective_factors[8];
             double jac_period;
-            double jac_margin;
 
             // save the old params
             for (int idx = 0; idx < 5; idx++) poly[idx] = m_polynomial[idx];
@@ -608,7 +605,7 @@ namespace crd_cpp {
 
             if(batch_size != 300){
                 double num = (double) useless_iterations / (double)max_useless_iterations;
-                num *= 1.5;
+                num *= 2;
                 const double step (300.0 - 30.0);
                 batch_size = (int) (num * step + 30);
                 batch_size = std::min(300, batch_size);
@@ -651,7 +648,7 @@ namespace crd_cpp {
             const double old_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
 
             // apply jacobians
-            for (int idx = 1; idx < 5; idx++){
+            for (int idx = 0; idx < 5; idx++){
                 // degree change
                 if(idx == 0) continue;
 
@@ -691,22 +688,6 @@ namespace crd_cpp {
                     failed_update = true;
                 }
             }
-            /*
-            {
-                m_poly_margin += learning_rate_margin * jac_margin;
-                m_poly_margin = cv::min(300, cv::max(1, m_poly_margin));
-                const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
-                if(new_loss > old_loss) {
-                    m_poly_margin -= learning_rate_margin * jac_period;
-                    learning_rate_margin /= 2;
-                    std::cout << new_loss << " > " << old_loss << " reducing lr_MARGIN to " << learning_rate_margin << std::endl;
-                    failed_update = true;
-                } else {
-                    learning_rate_margin *= 1.4;
-                }
-            }
-            */
-
 
             cost = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 0);
             const double saving = old_cost - cost ;
