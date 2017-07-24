@@ -697,9 +697,11 @@ namespace crd_cpp {
         double velocity[5];
         double history[5][20];
         int history_idx[5];
+        double prob[5];
         double step_size[5];
         for (int idx = 1; idx < 5; idx++) velocity[idx] = 0;
         for (int idx = 1; idx < 5; idx++) history_idx[idx] = -1;
+        for (int idx = 1; idx < 5; idx++) prob[idx] = 1.0/4.0;
         for (int idx = 1; idx < 5; idx++) for(int t = 0; t < 20; t++) history[idx][t] = 0;
         for (int idx = 1; idx < 5; idx++) step_size[idx] = std::abs(m_polynomial[idx]) * kRelativeStepSize;
         for (int idx = 1; idx < 5; idx++) poly[idx] = m_polynomial[idx];
@@ -728,22 +730,6 @@ namespace crd_cpp {
         double old_cost = initial_loss;
         int batch_size = -30;
 
-        /*
-        for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
-            for (double da4 = poly[4]*0.8; da4 < poly[4]*1.2; da4 += poly[4]*1e-1) {
-                poly[4] += da4;
-                for (double da3 = poly[3]*0.8; da3 < poly[3]*1.2; da3 += poly[3]*1e-3) {
-                    poly[3] += da3;
-                    double fx = eval_poly_loss(poly, m_perspective_factors, m_poly_period, batch_size);
-                    poly[3] -= da3;
-                    if(fx > 0) break;
-                }
-                poly[4] -= da4;
-            }
-        }
-        return;
-        */
-
         int iter_number;
         for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
 
@@ -760,8 +746,16 @@ namespace crd_cpp {
             double fx = eval_poly_loss(poly, m_perspective_factors, m_poly_period, batch_size);
 
             // degree change
-            const double pick = dis(generator);
+            double pick = dis(generator);
             int idx;
+            // print("pick:", pick, "\n");
+            /*
+            prob[4]=0.5;
+            prob[3]=0.25;
+            prob[2]=0.125;
+            prob[1]=0.125;
+             */
+
             if( pick < 0.5 ) {
                 idx = 4;
             } else if( pick < 0.75 ) {
@@ -771,7 +765,24 @@ namespace crd_cpp {
             } else {
                 idx = 1;
             }
-            print("USING IDX ", idx);
+
+            /*
+            std::cout << "-----------------------PROB----------------------------------" << std::endl;
+            for (int p_idx = 1; p_idx < 5; p_idx++) std::cout << prob[p_idx] << ", ";
+            std::cout << "\n-------------------------------------------------------------" << std::endl;
+            */
+
+            /*
+            for (int p_idx = 1; p_idx < 5; p_idx++){
+                if(prob[p_idx] > pick){
+                    idx = p_idx;
+                    break;
+                } else {
+                    pick -= prob[p_idx];
+                }
+            }
+            */
+            print("IDX", idx, "\n");
 
             const double h = step_size[idx];
 
@@ -804,10 +815,9 @@ namespace crd_cpp {
             const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -batch_size);
 
             if(new_loss > old_loss){
-                // m_polynomial[idx] -= ada * jac_polynomial[idx];
                 m_polynomial[idx] -= velocity[idx];
                 // m_polynomial[idx] -= learning_rate[idx] * jac_polynomial[idx];
-                learning_rate[idx] /= 2;
+                learning_rate[idx] *= 0.5;
             } else {
                 learning_rate[idx] *= 1.4;
             }
