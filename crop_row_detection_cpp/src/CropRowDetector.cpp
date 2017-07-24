@@ -541,25 +541,21 @@ namespace crd_cpp {
         std::cout << "ping" << std::endl;
         calculate_poly_points(); // not really needded
 
-        cv::Size ksize = cv::Size(11, 1);
+        cv::Size ksize = cv::Size(5, 1);
         double sigmaX = 0;
-        /*
-        std::cout << "[plotting] pre blur" << std::endl;
-        cv::imshow("pre-blur", intensity_map);
-        cv::waitKey(0);
-        cv::destroyAllWindows();
-         */
+        // std::cout << "[plotting] pre blur" << std::endl;
+        // cv::imshow("pre-blur", intensity_map);
+        // cv::waitKey(0);
+        // cv::destroyAllWindows();
 
         // cv::GaussianBlur(m_spammable_img, m_intensity_map, ksize, sigmaX);
         // cv::GaussianBlur(m_intensity_map, m_intensity_map, ksize, sigmaX);
         // cv::normalize(m_intensity_map, m_intensity_map, 1.0, 0.0, cv::NORM_MINMAX);
 
-        /*
-        std::cout << "[plotting] post blur" << std::endl;
-        cv::imshow("post-blurr", m_intensity_map);
-        cv::waitKey(0);
-        cv::destroyAllWindows();
-         */
+        // std::cout << "[plotting] post blur" << std::endl;
+        // cv::imshow("post-blurr", m_intensity_map);
+        // cv::waitKey(0);
+        // cv::destroyAllWindows();
 
         plot_fitted_polys("initial fit");
         clock_t start;
@@ -572,9 +568,12 @@ namespace crd_cpp {
         }
     }
     void Polyfit::fit_poly_on_image() {
-        int max_useless_iterations = 500;
-        int max_num_iterations = 30000;
-        double kRelativeStepSize = 1e-17;
+        int max_useless_iterations = 100;
+        int max_num_iterations = 5000;
+        double function_tolerance = 1e-3;
+        double parameter_tolerance = 1e-9;
+        const double kRelativeStepSize = 1e-6;
+        int batch_size = 30;
 
         fit_central(max_useless_iterations, max_num_iterations, kRelativeStepSize);
 
@@ -866,7 +865,7 @@ namespace crd_cpp {
             int row_num = indexes[idx];
             for (int poly_idx = poly_idx_min; poly_idx <= poly_idx_max; poly_idx++) {
                 const double column = eval_poly_double(row_num, poly_idx, poly, perspect, &period);
-                if(column < 0 || column > 398 || isnan(column) || period < 10){
+                if(column < 0 || column > 398 || period < 10){
                     cost += 9999;
                 } else {
                     const int left = (const int) floor(column);
