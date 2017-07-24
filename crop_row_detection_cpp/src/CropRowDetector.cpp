@@ -760,18 +760,18 @@ namespace crd_cpp {
             double fx = eval_poly_loss(poly, m_perspective_factors, m_poly_period, batch_size);
 
             // degree change
-            const int pick = dis(generator);
+            const double pick = dis(generator);
             int idx;
-            if( pick < (100-100/pow(2,1)) ) {
+            if( pick < 0.5 ) {
                 idx = 4;
-            } else if( pick < (100-100/pow(2,2)) ) {
+            } else if( pick < 0.75 ) {
                 idx = 3;
-            } else if( pick < (100-100/pow(2,3)) ) {
+            } else if( pick < 0.875 ) {
                 idx = 2;
             } else {
                 idx = 1;
             }
-            // print("USING IDX ", idx);
+            print("USING IDX ", idx);
 
             const double h = step_size[idx];
 
@@ -825,11 +825,11 @@ namespace crd_cpp {
                 break;
             }
             old_cost = cost;
-            // for (int i = 1; i < 5; i++) std::cout << "idx: " << i << ": " << learning_rate[i] << ", ";
+            for (int i = 1; i < 5; i++) std::cout << "idx: " << i << ": " << learning_rate[i] << ", ";
             std::cout << std::endl;
         }
         double final_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
-        // std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
+        std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
     }
 
     double Polyfit::eval_poly_loss(const double *poly, const double *perspect, const double period, int batch_size) {
