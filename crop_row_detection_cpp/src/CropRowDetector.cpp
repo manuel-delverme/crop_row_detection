@@ -687,10 +687,11 @@ namespace crd_cpp {
         for (int idx = 0; idx < 5; idx++) for(int t = 0; t < 20; t++) history[idx][t] = 0;
         for (int idx = 0; idx < 5; idx++) step_size[idx] = std::abs(m_polynomial[idx]) * kRelativeStepSize;
         for (int idx = 0; idx < 5; idx++) poly[idx] = m_polynomial[idx];
-        step_size[1] = 3.55273e-22;
-        step_size[2] = 6.67477e-20;
-        step_size[3] = 3.9611e-17;
-        step_size[4] = 1.51303e-14;
+
+        step_size[1] = 3.55273e-8;
+        step_size[2] = 6.67477e-5;
+        step_size[3] = 3.9611e-3;
+        step_size[4] = 1;
 
         /*
         for (int idx = 1; idx < 5; idx++){
@@ -712,7 +713,8 @@ namespace crd_cpp {
          */
 
         double old_cost = initial_loss;
-        int batch_size = 30;
+        int batch_size = -30;
+        for (int idx = 0; idx < 5; idx++) poly[idx] = m_polynomial[idx];
 
         int iter_number;
         for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
@@ -730,6 +732,7 @@ namespace crd_cpp {
             double fx = eval_poly_loss(poly, m_perspective_factors, m_poly_period, -batch_size);
 
             std::uniform_int_distribution<> dis(0, 100);
+            std::normal_distribution<> normal_dist(0, 5);
             std::default_random_engine generator;
             // degree change
             const int pick = dis(generator);
@@ -746,14 +749,26 @@ namespace crd_cpp {
 
             const double h = step_size[idx];
 
-            // poly[idx] -= h;
+            poly[idx] -= h;
             // double fxmh = eval_poly_loss(poly, perspect, period, -batch_size);
             // poly[idx] += h;
 
+            //poly[idx] -= 2*h;
+            //double fxm2h = eval_poly_loss(poly, m_perspective_factors, m_poly_period, -batch_size);
+            //poly[idx] += h;
+            // double fxmh = eval_poly_loss(poly, m_perspective_factors, m_poly_period, -batch_size);
+            // poly[idx] += h;
             poly[idx] += h;
             double fxh = eval_poly_loss(poly, m_perspective_factors, m_poly_period, -batch_size);
             poly[idx] -= h;
+            //double fx2h = eval_poly_loss(poly, m_perspective_factors, m_poly_period, -batch_size);
+
             jac_polynomial[idx] = ((fx - fxh) / h);
+
+            //jac_polynomial[idx] = -(-fx2h+8*fxh-8*fxmh+fxm2h)/(12*h);
+
+            // double noise = normal_dist(generator);
+            // jac_polynomial[idx] += noise;
 
             // const int hidx = (++history_idx[idx]);
             // history_idx[idx] = hidx % 20;
@@ -778,15 +793,16 @@ namespace crd_cpp {
                 // m_polynomial[idx] -= ada * jac_polynomial[idx];
                 m_polynomial[idx] -= velocity[idx];
                 // m_polynomial[idx] -= learning_rate[idx] * jac_polynomial[idx];
-                learning_rate[idx] /= 2;
-            } else {
-                learning_rate[idx] *= 1.4;
+                learning_rate[idx] *= 0.5;
+            } else if(new_loss < old_loss){
+                learning_rate[idx] *= 1.05;
             }
             cost = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
             const double saving = old_cost - cost ;
-            std::cout << " cost: " << cost << " saved " << saving << " ";
-            for (int i = 1; i < 5; i++) std::cout << "idx: " << i << ": " << learning_rate[idx] << ", ";
-            std::cout << std::endl;
+
+            // std::cout << " cost: " << cost << " saved " << saving << " ";
+            // for (int i = 1; i < 5; i++) std::cout << "idx: " << i << ": " << learning_rate[idx] /*<< "/" << velocity[idx]*/ << ", ";
+            // std::cout << std::endl;
 
             if(std::abs(saving) < function_tolerance || (saving > -function_tolerance && saving < 0)){
                 useless_iterations++;
@@ -794,13 +810,14 @@ namespace crd_cpp {
                 useless_iterations = 0;
             }
             if(useless_iterations > max_useless_iterations){
-                std::cout << "BREAK; useless:" << useless_iterations << std::endl;
+                // std::cout << "BREAK; useless:" << useless_iterations << std::endl;
                 break;
             }
             old_cost = cost;
         }
         double final_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
-        std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
+        // std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
+        std::cout << ":\t" << final_loss << "\t" << iter_number;
     }
 
     double Polyfit::eval_poly_loss(const double *poly, const double *perspect, const double period, int batch_size) {
@@ -896,7 +913,7 @@ namespace crd_cpp {
         m_options.function_tolerance = 1e-10;
         m_options.parameter_tolerance = 1e-14;
         m_options.linear_solver_type = ceres::DENSE_QR;
-        m_options.minimizer_progress_to_stdout = false;
+        m_options.minimizer_progress_to_stdout = true;
 
         int poly_idx;
         ceres::CostFunction *cost_function;

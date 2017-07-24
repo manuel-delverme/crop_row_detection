@@ -48,7 +48,8 @@ namespace crd_cpp {
                 green = greenNorm / sumNorm;
                 red = redNorm / sumNorm;
 
-                ExG = ((2 * green - blue - red) > 0) ? (2 * green - blue - red) * 255.0 : 0;
+                ExG =  (2 * green - blue - red) * 255.0;
+                ExG = std::max(0.0, ExG);
 
                 *intensity_ptr = (unsigned char) ExG;
 
