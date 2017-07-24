@@ -145,6 +145,7 @@ namespace crd_cpp {
         void calculate_poly_points();
         void fit_poly_on_image();
         double eval_poly_loss(const double *poly, const double *perspect, const double period, const int margin);
+        void fit_central(const int max_useless_iterations, const int max_num_iterations, const double kRelativeStepSize);
 
         cv::Mat m_intensity_map;
 
