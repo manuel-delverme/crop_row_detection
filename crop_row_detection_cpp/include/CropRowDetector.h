@@ -140,13 +140,14 @@ namespace crd_cpp {
         int eval_poly(int image_row_num, int poly_idx);
         void plot_fitted_polys(std::string suffix);
         cv::Mat drawDenseOptFlow(const cv::Mat &flow, const cv::Mat &img, int step, cv::Scalar color, const cv::Mat &mask);
-        void fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points);
+        void fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points, double std, double mean);
         void add_noise_to_polys(double std);
         cv::Mat calculate_flow(const cv::Mat &new_frame);
         void calculate_poly_points();
-        void fit_poly_on_image();
-        double eval_poly_loss(const double *poly, const double *perspect, const double period, const int margin);
-        void fit_central(const int max_useless_iterations, const int max_num_iterations, const double kRelativeStepSize);
+        double fit_poly_on_image(const int max_num_iterations, const int max_useless_iterations);
+        double eval_poly_loss(const double *poly, const double *perspect, const double period, const int margin,
+                              const bool only_central);
+        double fit_central(const int max_useless_iterations, const int max_num_iterations, const double kRelativeStepSize);
 
         cv::Mat m_intensity_map;
 
@@ -172,7 +173,8 @@ namespace crd_cpp {
                                    const double m_perspective_factors[8], const double* m_poly_period);
         static const double eval_poly_double(int image_row_num, int poly_idx, const double m_polynomial[5],
                                    const double m_perspective_factors[8], const double* m_poly_period);
-        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, cv::Mat &out_img);
+        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, cv::Mat &out_img,
+                const int max_num_iterations, const int max_useless_iterations);
         void fit(cv::Mat new_frame);
         void add_noise();
     };

@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
     // crd_cpp::plot_template_matching(intensityImage, min_energy_results, out_image);
 
     std::cout << ">fitting initial guess" << std::endl;
-    crd_cpp::Polyfit polyfit(img, intensityImage, min_energy_results, out_image);
+    crd_cpp::Polyfit polyfit(img, intensityImage, min_energy_results, out_image, atoi(argv[2]), atoi(argv[3]));
 
     // teardown cpp
     std::cout << "teardown" << std::endl;
