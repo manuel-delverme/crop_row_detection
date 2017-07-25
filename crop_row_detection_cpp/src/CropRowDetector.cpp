@@ -685,7 +685,7 @@ namespace crd_cpp {
 
         double poly[5];
 
-        double learning_rate[5] = {lr, lr, lr, lr, lr, };
+        double learning_rate[5] = {lr, lr, lr, lr, 0.0001/0.615, };
         double initial_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
 
         // degree change
@@ -727,14 +727,14 @@ namespace crd_cpp {
             // std::cout << step_size[idx] << std::endl;
         }
 
-        double old_cost = initial_loss;
-        int batch_size = -30;
+        double last_iter_loss = initial_loss;
+        int batch_size = -300;
 
         int iter_number;
         for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
 
             // save the old params
-            for (int idx = 0; idx < 5; idx++) poly[idx] = m_polynomial[idx];
+            // for (int idx = 0; idx < 5; idx++) poly[idx] = m_polynomial[idx];
 
             // update batch
             if(batch_size != -300)
@@ -743,7 +743,7 @@ namespace crd_cpp {
             // pre-jump Nesterov accelerated gradient
             // for (int idx = 0; idx < 5; idx++) m_polynomial[idx] += gamma * velocity[idx];
 
-            double fx = eval_poly_loss(poly, m_perspective_factors, m_poly_period, batch_size);
+            double fx = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
 
             // degree change
             double pick = dis(generator);
@@ -782,24 +782,27 @@ namespace crd_cpp {
                 }
             }
             */
-            print("IDX", idx, "\n");
-
+            // print("IDX", idx, "\n");
             const double h = step_size[idx];
 
             // poly[idx] -= h;
             // double fxmh = eval_poly_loss(poly, perspect, period, -batch_size);
             // poly[idx] += h;
 
-            poly[idx] += h;
-            double fxh = eval_poly_loss(poly, m_perspective_factors, m_poly_period, -batch_size);
-            poly[idx] -= h;
-            jac_polynomial[idx] = ((fx - fxh) / h);
+            const double old_val = m_polynomial[idx]; //poly[idx] += h;
+            m_polynomial[idx] += h;
+            double fxh = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
+
+            // avoid precision errors
+            m_polynomial[idx] = old_val;
+
+            // poly[idx] -= h;
+
+            jac_polynomial[idx] = ((fxh - fx) / h);
 
             // const int hidx = (++history_idx[idx]);
             // history_idx[idx] = hidx % 20;
             // history[idx][history_idx[idx]] = jac_polynomial[idx];
-
-            const double old_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -batch_size);
 
             // double new_lr = 1e-18;
             // for(int t = 0; t < 20; t++)
@@ -808,35 +811,39 @@ namespace crd_cpp {
 
             // m_polynomial[idx] += ada * jac_polynomial[idx];
 
+            const double pre_step_loss = fx;
+            const double pre_step_poly = m_polynomial[idx];
             velocity[idx] = gamma * velocity[idx]  + learning_rate[idx] * (jac_polynomial[idx]);
-            m_polynomial[idx] += velocity[idx];
+            print(idx, m_polynomial[idx], "-=", velocity[idx], "\t| ");
+            m_polynomial[idx] -= velocity[idx];
 
             // m_polynomial[idx] += learning_rate[idx] * jac_polynomial[idx];
-            const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -batch_size);
+            // const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
+            double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
 
-            if(new_loss > old_loss){
-                m_polynomial[idx] -= velocity[idx];
+            const double saving = last_iter_loss - new_loss;
+            if(saving < -function_tolerance){
+                m_polynomial[idx] = pre_step_poly;
                 // m_polynomial[idx] -= learning_rate[idx] * jac_polynomial[idx];
                 learning_rate[idx] *= 0.5;
+                new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
+                if(new_loss != pre_step_loss){
+                    print("WHAT THE FUCK! CALL MANUEL!!!\n");
+                    assert(false);
+                }
             } else {
                 learning_rate[idx] *= 1.4;
             }
-            cost = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
-            const double saving = old_cost - cost ;
-            // std::cout << " cost: " << cost << " saved " << saving << std::endl;
+            std::cout << "cost: " << new_loss << " saved " << saving << std::endl;
 
             if(std::abs(saving) < function_tolerance || (saving > -function_tolerance && saving < 0)){
                 useless_iterations++;
             } else {
                 useless_iterations = 0;
             }
-            if(useless_iterations > max_useless_iterations){
-                std::cout << "BREAK; useless:" << useless_iterations << std::endl;
-                break;
-            }
-            old_cost = cost;
-            for (int i = 1; i < 5; i++) std::cout << "idx: " << i << ": " << learning_rate[i] << ", ";
-            std::cout << std::endl;
+            if(useless_iterations > max_useless_iterations){ break; }
+            last_iter_loss = new_loss;
+            // std::cout << std::endl;
         }
         double final_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
         std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
@@ -846,25 +853,29 @@ namespace crd_cpp {
         int poly_idx_min = -1;
         int poly_idx_max = 1;
 
+        if (batch_size == 0) batch_size = 300;
+
         if(batch_size < 0){
+            // consider only center row
             batch_size = -batch_size;
             poly_idx_min = 0;
             poly_idx_max = 0;
         }
 
-        int indexes[batch_size==0?300:batch_size];
+        int indexes[batch_size];
+
+        std::uniform_int_distribution<> dis(0, 300);
+        std::default_random_engine generator;
+        generator.seed();
 
         if(batch_size == 0 || batch_size == 300){
-            batch_size = 300;
             for (int idx = 0; idx < batch_size; idx++)
                 indexes[idx] = idx;
         } else {
-            std::uniform_int_distribution<> dis(0, 300);
-            std::default_random_engine generator;
+            auto pick = dis(generator);
 
-            if(dis(generator) > 150) poly_idx_max += 1; // with p=0.5 skip left
+            if( pick > 150) poly_idx_max = 1; // with p=0.5 skip left
             else poly_idx_min -= 1;
-
             for (int idx = 0; idx < batch_size; idx++)
                 indexes[idx] = dis(generator);
         }
