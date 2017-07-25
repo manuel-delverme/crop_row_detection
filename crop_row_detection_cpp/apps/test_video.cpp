@@ -33,7 +33,7 @@ int main ( int argc, char **argv )
     // resize image?
     intensityImage = preprocessor.process(video_image);
 
-    crd_cpp::Polyfit polyfit ( video_image, intensityImage, min_energy_results);
+    //crd_cpp::Polyfit polyfit ( video_image, intensityImage, min_energy_results);
 
     // cv::Mat img = cv::imread(image_file_name);
     // cv::resize(img, img, image_size);
@@ -43,7 +43,7 @@ int main ( int argc, char **argv )
     {
         capture >> video_image;
         intensityImage = preprocessor.process (video_image);
-        polyfit.fit (video_image);
+        //polyfit.fit (video_image);
     }
     // teardown cp
     std::cout << "teardown" << std::endl;

@@ -7,6 +7,7 @@
 
 #include <ceres/ceres.h>
 
+
 namespace crd_cpp {
     typedef int phase_type;
     typedef float period_type;

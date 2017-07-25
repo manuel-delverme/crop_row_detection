@@ -520,42 +520,24 @@ namespace crd_cpp {
                      cv::Mat intensity_map,
                      std::vector<crd_cpp::old_tuple_type> ground_truth,
                      cv::Mat &out_img) {
-        double mean = 0;
-        for(int r=0; r < intensity_map.rows; r++)
-            for(int c=0; c < intensity_map.cols; c++)
-                mean += intensity_map.at<uchar>(r, c);
-        mean /= intensity_map.rows * intensity_map.cols;
-        std::cout << "mean " << mean << " cv::mean" << cv::mean(intensity_map) << std::endl;
-        m_mean = 0;
+
+      
         m_image = image.clone();
         m_image_center = image.cols / 2;
         m_image_height = image.rows;
-        m_intensity_map = intensity_map;
+	
+	cv::Size ksize = cv::Size(9, 1);
+        double sigmaX = 0;
+        cv::GaussianBlur(intensity_map, m_intensity_map, ksize, sigmaX);
+	
+	//cv::medianBlur(intensity_map, m_intensity_map, 5);
+        //m_intensity_map = intensity_map;
         m_crop_row_points = std::vector<cv::Point2f>((size_t) image.rows * 3);
         m_spammable_img = out_img;
 
-        std::cout << "ping" << std::endl;
+		
         std::reverse(ground_truth.begin(), ground_truth.end());
-        std::cout << "ping" << std::endl;
         fit_poly_on_points(ground_truth);
-        std::cout << "ping" << std::endl;
-        calculate_poly_points(); // not really needded
-
-        cv::Size ksize = cv::Size(5, 1);
-        double sigmaX = 0;
-        // std::cout << "[plotting] pre blur" << std::endl;
-        // cv::imshow("pre-blur", intensity_map);
-        // cv::waitKey(0);
-        // cv::destroyAllWindows();
-
-        // cv::GaussianBlur(m_spammable_img, m_intensity_map, ksize, sigmaX);
-        // cv::GaussianBlur(m_intensity_map, m_intensity_map, ksize, sigmaX);
-        // cv::normalize(m_intensity_map, m_intensity_map, 1.0, 0.0, cv::NORM_MINMAX);
-
-        // std::cout << "[plotting] post blur" << std::endl;
-        // cv::imshow("post-blurr", m_intensity_map);
-        // cv::waitKey(0);
-        // cv::destroyAllWindows();
 
         plot_fitted_polys("initial fit");
         clock_t start;
@@ -567,119 +549,21 @@ namespace crd_cpp {
             plot_fitted_polys("imap fit" + std::to_string(i));
         }
     }
+    
     void Polyfit::fit_poly_on_image() {
-        int max_useless_iterations = 100;
-        int max_num_iterations = 5000;
-        double function_tolerance = 1e-3;
-        double parameter_tolerance = 1e-9;
+        int max_useless_iterations = 40;
+        int max_num_iterations = 8000;
+        double function_tolerance = 1e-2;
+        double parameter_tolerance = 1e-10;
         const double kRelativeStepSize = 1e-6;
         int batch_size = 30;
 
         fit_central(max_useless_iterations, max_num_iterations, kRelativeStepSize);
-
-        /*
-        double jac_perspective_factors[8];
-        double jac_period;
-
-
-        double learning_rate_persp[8];
-        double learning_rate_period;
-
-        learning_rate_persp= {lr, lr, lr, lr, lr, lr, lr, lr};
-        learning_rate_period= 1;
-        learning_rate_persp[0] = 0;
-        learning_rate_persp[1] = 0;
-
-        for (int iter_number = 0, useless_iterations=0, function_tolerance = 1e-5; iter_number < max_num_iterations; iter_number++) {
-            bool failed_update = false;
-
-            // save the old params
-            // for (int idx = 0; idx < 5; idx++) poly[idx] = m_polynomial[idx];
-            for (int idx = 0; idx < 8; idx++) perspect[idx] = m_perspective_factors[idx];
-            period = m_poly_period;
-
-            if(batch_size != 300){
-                double num = (double) useless_iterations / (double)max_useless_iterations;
-                num *= 2;
-                const double step (300.0 - 30.0);
-                batch_size = (int) (num * step + 30);
-                batch_size = std::min(300, batch_size);
-            }
-            double fx = eval_poly_loss(poly, perspect, period, batch_size);
-
-            for (int idx = 0; idx < 8; idx++) {
-                // degree change
-                if(idx == 0 || idx == 1) continue;
-
-                const double h = std::abs(perspect[idx]) * kRelativeStepSize;
-                perspect[idx] += h;
-                double fxh = eval_poly_loss(m_polynomial, perspect, period, batch_size);
-                perspect[idx] -= h;
-                jac_perspective_factors[idx] = (fxh - fx) / h;
-            }
-            {
-                const double h = std::abs(period) * 1 / 100;
-                period += h;
-                double fxh = eval_poly_loss(m_polynomial, perspect, period, batch_size);
-                period -= h;
-                jac_period = (fxh - fx) / h;
-            }
-
-            const double old_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
-
-            for (int idx = 0; idx < 8; idx++){
-                // degree change
-                if(idx == 0 || idx == 1) continue;
-
-                m_perspective_factors[idx] += learning_rate_persp[idx] * jac_perspective_factors[idx];
-                const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
-                if(new_loss > old_loss){
-                    m_perspective_factors[idx] -= learning_rate_persp[idx] * jac_perspective_factors[idx];
-                    learning_rate_persp[idx] /= 2;
-                    // std::cout << new_loss << " > " << old_loss << " reducing lr_persp " << idx << " to " << learning_rate_persp[idx] << std::endl;
-                    failed_update = true;
-                } else {
-                    learning_rate[idx] *= 1.4;
-                }
-            }
-            {
-                m_poly_period += learning_rate_period * jac_period;
-                const double new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size);
-                if(new_loss > old_loss) {
-                    m_poly_period -= learning_rate_period * jac_period;
-                    learning_rate_period /= 2;
-                    // std::cout << new_loss << " > " << old_loss << " reducing lr_period to " << learning_rate_period << std::endl;
-                    failed_update = true;
-                }
-            }
-
-            cost = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 0);
-            const double saving = old_cost - cost ;
-            std::cout << iter_number << " cost: " << cost << " saved " << saving << std::endl;
-
-            // if(std::abs(saving) < function_tolerance || saving > -function_tolerance){
-            if(std::abs(saving) < function_tolerance || (saving > -function_tolerance && saving < 0)){
-                useless_iterations++;
-            } else {
-                useless_iterations = 0;
-            }
-
-            if(useless_iterations > max_useless_iterations){
-                std::cout << "BREAK; useless:" << useless_iterations << std::endl;
-                break;
-            }
-            old_cost = cost;
-        }
-        final_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 0);
-        std::cout << "diff: " << final_loss - initial_loss << " iter:" << iter_number << std::endl;
-        // for (int idx = 0; idx < 5; idx++) std::cout << "poly_lr" << idx << ": " << learning_rate[idx] << std::endl;
-        // for (int idx = 0; idx < 8; idx++) std::cout << "prosp_lr" << idx << ": " << learning_rate_persp[idx] << std::endl;
-         */
     }
 
     void Polyfit::fit_central(const int max_useless_iterations, const int max_num_iterations, const double kRelativeStepSize) {
         const double lr = 1e-5;
-        double function_tolerance = 1e-6;
+        double function_tolerance = 1e-4;
         double parameter_tolerance = 1e-9;
         const double gamma = 0.9;
 
@@ -723,12 +607,12 @@ namespace crd_cpp {
                     step_size[idx] *= 2;
                 }
             }
-            step_size[idx] *= 10;
+            step_size[idx] *= 100;
             // std::cout << step_size[idx] << std::endl;
         }
 
         double last_iter_loss = initial_loss;
-        int batch_size = -300;
+        int batch_size = -30;
 
         int iter_number;
         for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
@@ -829,10 +713,10 @@ namespace crd_cpp {
                 new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, -300);
                 if(new_loss != pre_step_loss){
                     print("WHAT THE FUCK! CALL MANUEL!!!\n");
-                    assert(false);
+                    //assert(false);
                 }
             } else {
-                learning_rate[idx] *= 1.4;
+                learning_rate[idx] *= 1.4 ;
             }
             std::cout << "cost: " << new_loss << " saved " << saving << std::endl;
 
@@ -841,7 +725,10 @@ namespace crd_cpp {
             } else {
                 useless_iterations = 0;
             }
-            if(useless_iterations > max_useless_iterations){ break; }
+            if(useless_iterations > max_useless_iterations){ 
+	      std::cout << "Max useless iteration : " << useless_iterations << std::endl;
+	      break; 
+	    }
             last_iter_loss = new_loss;
             // std::cout << std::endl;
         }
@@ -864,20 +751,21 @@ namespace crd_cpp {
 
         int indexes[batch_size];
 
-        std::uniform_int_distribution<> dis(0, 300);
+        std::uniform_int_distribution<> dis(0, 100);
         std::default_random_engine generator;
-        generator.seed();
-
-        if(batch_size == 0 || batch_size == 300){
+        generator.seed(std::time(NULL));
+	
+        if(batch_size == 300){
             for (int idx = 0; idx < batch_size; idx++)
                 indexes[idx] = idx;
         } else {
             auto pick = dis(generator);
 
-            if( pick > 150) poly_idx_max = 1; // with p=0.5 skip left
-            else poly_idx_min -= 1;
-            for (int idx = 0; idx < batch_size; idx++)
+            //if( pick > 150) poly_idx_max = 1; // with p=0.5 skip left
+            //else poly_idx_min -= 1;
+            for (int idx = 0; idx < batch_size; idx++){
                 indexes[idx] = dis(generator);
+	    }
         }
 
         double cost = 0;
