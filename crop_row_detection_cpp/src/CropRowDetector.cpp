@@ -540,10 +540,17 @@ namespace crd_cpp {
 
 
         fit_poly_on_points(ground_truth, 15, 10);
-        // for(int idx = 0; idx < 4; idx++) m_polynomial[idx] = 0;
-        plot_fitted_polys("initial fit");
-        start = std::clock();
-        double cost = fit_poly_on_image(max_num_iterations, max_useless_iterations);
+        double cost;
+        if(max_num_iterations<0){
+            for(int idx = 0; idx < 4; idx++) m_polynomial[idx] = 0;
+            plot_fitted_polys("initial fit");
+            start = std::clock();
+            cost = fit_poly_on_image(-max_num_iterations, max_useless_iterations);
+        } else {
+            plot_fitted_polys("initial fit");
+            start = std::clock();
+            cost = fit_poly_on_image(max_num_iterations, max_useless_iterations);
+        }
         std::cout << cost << "; fit time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
         plot_fitted_polys("imap fit vertical");
         return;
