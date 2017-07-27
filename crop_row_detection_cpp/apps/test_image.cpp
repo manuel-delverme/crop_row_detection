@@ -31,6 +31,7 @@ int main(int argc, char **argv) {
     // cpp image processing
     cv::Mat intensityImage = preprocessor.process(img);
 
+    /*
     // templte matching for cpp
     start = std::clock();
     row_detector.template_matching(intensityImage);
@@ -52,8 +53,9 @@ int main(int argc, char **argv) {
     cv::cvtColor(intensityImage, out_image, cv::COLOR_GRAY2BGR);
     // crd_cpp::plot_template_matching(intensityImage, min_energy_results, out_image);
 
+     */
     std::cout << ">fitting initial guess" << std::endl;
-    crd_cpp::Polyfit polyfit(img, intensityImage, min_energy_results, out_image, atoi(argv[2]), atoi(argv[3]));
+    crd_cpp::Polyfit polyfit(img, intensityImage, atoi(argv[2]), atoi(argv[3]));
 
     // teardown cpp
     std::cout << "teardown" << std::endl;

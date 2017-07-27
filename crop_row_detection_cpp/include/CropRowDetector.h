@@ -146,8 +146,9 @@ namespace crd_cpp {
         void calculate_poly_points();
         double fit_poly_on_image(const int max_num_iterations, const int max_useless_iterations);
         double eval_poly_loss(const double *poly, const double *perspect, const double period, const int margin,
-                              const bool only_central);
-        double fit_central(const int max_useless_iterations, const int max_num_iterations, const double kRelativeStepSize);
+                              const bool only_central, const bool sub_pixel);
+        double fit_central(const int max_useless_iterations, const int max_num_iterations, const double function_tolerance);
+        double fit_perspective(const int max_useless_iterations, const int max_num_iterations, const double function_tolerance);
 
         cv::Mat m_intensity_map;
 
@@ -173,9 +174,8 @@ namespace crd_cpp {
                                    const double m_perspective_factors[8], const double* m_poly_period);
         static const double eval_poly_double(int image_row_num, int poly_idx, const double m_polynomial[5],
                                    const double m_perspective_factors[8], const double* m_poly_period);
-        Polyfit(cv::Mat image, cv::Mat intensity_map, std::vector<crd_cpp::old_tuple_type> ground_truth, cv::Mat &out_img,
-                const int max_num_iterations, const int max_useless_iterations);
-        void fit(cv::Mat new_frame);
+        Polyfit(cv::Mat &intensity_map, cv::Mat out_img, const int max_num_iterations, const int max_useless_iterations);
+        double fit(cv::Mat new_frame, const int max_num_iterations, const int max_useless_iterations);
         void add_noise();
     };
 }
