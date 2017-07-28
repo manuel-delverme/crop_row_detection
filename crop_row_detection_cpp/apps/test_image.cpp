@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
 
      */
     std::cout << ">fitting initial guess" << std::endl;
-    crd_cpp::Polyfit polyfit(img, intensityImage, atoi(argv[2]), atoi(argv[3]));
+    crd_cpp::Polyfit polyfit(img, intensityImage, atoi(argv[2]), atoi(argv[3]), 1e-7);
 
     // teardown cpp
     std::cout << "teardown" << std::endl;

@@ -29,30 +29,33 @@ namespace crd_cpp {
     class PointResidual {
     public:
         static ceres::CostFunction *Create(double x, double y, int poly_idx) {
-            return (new ceres::AutoDiffCostFunction<PointResidual, 1, 5, 8, 1>(new PointResidual(x, y, poly_idx)));
+            return (new ceres::AutoDiffCostFunction<PointResidual, Polyfit::NR_POLY_PARAMETERS, 1>(
+                    new PointResidual(x, y, poly_idx)));
         }
 
         template<typename T>
-        bool operator()(const T *poly_coeff, const T *perspective_coeff, const T *poly_period, T *residual) const {
-            residual[0] = T(target_column)
-                          - eval_poly_double(row_num_, poly_idx_, poly_coeff, perspective_coeff, poly_period);
+        bool operator()(const T *params, T *residual) const {
+            residual[0] = T(target_column) - eval_poly_double(row_num_, poly_idx_, params);
             return true;
         }
     public:
         template<typename T>
-        const T eval_poly_double(double image_row_num, double poly_idx, const T *polynomial,
-                                 const T *perspective_factors, const T *poly_period) const {
-            image_row_num = 300 - image_row_num;
+        const T eval_poly_double(double image_row_num, double poly_idx, const T *params) const {
+            // *polynomial, const T *perspective_factors, const T *poly_period
+
+            //TODO CHECK IF REMOVE COMMENT
+            // image_row_num = 300 - image_row_num;
             T column;
-            T poly_origin = polynomial[4] + *(poly_period) * poly_idx;
+            T poly_origin = params[0] + params[Polyfit::PERIOD_OFFSET] * poly_idx;
             column = (
                     // degree change
                     //  (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
-                    + (perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(T(image_row_num), 3)
-                    + (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(T(image_row_num), 2)
-                    + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * T(image_row_num)
-                    + polynomial[4]
-                    + T(poly_idx) * *(poly_period)
+                    // + (params[Polyfit::PERSPECTIVE_OFFSET][7] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET][2]) * params[3] * pow(T(image_row_num), 3)
+                    + (params[Polyfit::PERSPECTIVE_OFFSET+5] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+4]) * params[3] * pow(T(image_row_num), 3)
+                    + (params[Polyfit::PERSPECTIVE_OFFSET+3] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+2]) * params[2] * pow(T(image_row_num), 2)
+                    + (params[Polyfit::PERSPECTIVE_OFFSET+1] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+0]) * params[1] * T(image_row_num)
+                    + params[0]
+                    + T(poly_idx) * params[Polyfit::PERIOD_OFFSET]
             );
             return column;
         }
@@ -64,280 +67,111 @@ namespace crd_cpp {
     };
 
     Polyfit::Polyfit(cv::Mat &out_img, cv::Mat intensity_map, const int max_num_iterations,
-                     const int max_useless_iterations) {
+                     const int max_useless_iterations, const double function_tolerance) {
+
         m_image_center = intensity_map.cols / 2;
+        m_image_width = intensity_map.cols;
         m_image_height = intensity_map.rows;
 
+        // blur to improve convergence
         cv::Size ksize = cv::Size(3, 1);
         double sigmaX = 0;
         print("blur\n");
-        cv::GaussianBlur(intensity_map, m_intensity_map, ksize, sigmaX);
-
-        //cv::medianBlur(intensity_map, m_intensity_map, 5);
+        cv::GaussianBlur(intensity_map, intensity_map, ksize, sigmaX);
+        //cv::medianBlur(intensity_map, intensity_map, 5);
         //m_intensity_map = intensity_map;
-        m_crop_row_points = std::vector<cv::Point2f>((size_t) intensity_map.rows * 3);
-        m_spammable_img = out_img;
-        m_image = out_img;
+
+        m_drawable_image = out_img;
 
         // std::reverse(ground_truth.begin(), ground_truth.end());
         clock_t start;
 
+        // initial guess
         // fit_poly_on_points(ground_truth, 0, 0);
-        for (int idx = 0; idx < 4; idx++) m_polynomial[idx] = 1e-33;
-        m_polynomial[4] = m_image_center + 1e-10;
+        for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) m_parameters[idx] = 1e-33;
+        m_parameters[0] = m_image_center + 1e-10;
 
         plot_fitted_polys("initial fit");
         start = std::clock();
 
-        double cost = fit(m_intensity_map, max_num_iterations, max_useless_iterations);
+        double cost = fit(intensity_map, max_num_iterations, max_useless_iterations, function_tolerance);
+        std::cout << cost << "; fit time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000)
+                  << " ms" << std::endl;
 
-        std::cout << cost << "; fit time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms"
-                  << std::endl;
         plot_fitted_polys("imap fit vertical" + std::to_string(std::clock()));
         // test_noise(max_num_iterations, max_useless_iterations, start);
     }
 
-    void Polyfit::test_noise(const int max_num_iterations, const int max_useless_iterations, clock_t start) {
+
+    /*
+    void Polyfit::test_noise(const cv::Mat &intensity_map, const int max_num_iterations, const int max_useless_iterations, double min_score) {
+        clock_t start;
         for (int mean = 0; mean < 100; mean += 10) {
             for (int stdev = 0; stdev < 100; stdev += 10) {
                 // fit_poly_on_points(ground_truth, mean, stdev);
                 plot_fitted_polys("initial fit" + std::__cxx11::to_string(mean) + "," + std::__cxx11::to_string(stdev));
                 start = clock();
-                double cost = fit_poly_on_image(max_num_iterations, max_useless_iterations);
+                assert("DISABLED" == "FIXME");
+                double cost = 1;// fit_poly_on_image(intensity_map, max_num_iterations, max_useless_iterations);
                 std::cout << cost << "; fit time: " << (clock() - start) / (double) (CLOCKS_PER_SEC / 1000)
                           << " ms" << std::endl;
                 plot_fitted_polys("imap fit" + std::__cxx11::to_string(mean) + "," + std::__cxx11::to_string(stdev));
             }
         }
     }
+    */
 
-    double Polyfit::fit_poly_on_image(const int max_num_iterations, const int max_useless_iterations) {
-        // double first_loss = fit_central(max_useless_iterations, max_num_iterations, 5e-4);
-        // plot_fitted_polys("imap fit first step");
-        double central_loss = fit_central(max_useless_iterations, max_num_iterations, 1e-6);
+    double Polyfit::fit_poly_on_image(const cv::Mat &new_frame, const int max_num_iterations, const int max_useless_iterations, const double function_tolerance) {
+        m_intensity_map = new_frame;
+        double central_loss = fit_central(max_useless_iterations, max_num_iterations, function_tolerance);
         // double total_loss = fit_perspective(max_useless_iterations, max_num_iterations, 1e-6);
-        // std::cout << "FIRST STEP: loss: " << first_loss << std::endl;
         return central_loss;
-    }
-
-    double Polyfit::fit_perspective(const int max_useless_iterations, const int max_num_iterations,
-                                    const double function_tolerance) {
-        const double lr = 1e-3;
-        const double gamma = 0.9;
-
-        double poly[5];
-
-        double learning_rate[5] = {
-                0,
-                std::pow(lr, 4.0),
-                std::pow(lr, 3.0),
-                std::pow(lr, 2.0),
-                std::pow(lr, 1.0),
-        };
-        double initial_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, false, true);
-
-        // degree change
-        learning_rate[0] = 0;
-
-        int useless_iterations = 0;
-        double jac_polynomial[5];
-        double velocity[5];
-        double step_size[5];
-        int downs[5];
-        int ups[5];
-        for (int idx = 1; idx < 5; idx++) velocity[idx] = 0;
-        for (int idx = 1; idx < 5; idx++) step_size[idx] = 1e-33 + std::abs(m_polynomial[idx]) * 1e-10;
-        for (int idx = 1; idx < 5; idx++) poly[idx] = m_polynomial[idx];
-
-        for (int idx = 1; idx < 5; idx++) {
-            double fx = eval_poly_loss(poly, m_perspective_factors, m_poly_period, 300, true, false);
-            double worked = 0;
-            while (worked == 0) {
-                const double h = step_size[idx];
-                poly[idx] += h;
-                double fxh = eval_poly_loss(poly, m_perspective_factors, m_poly_period, 300, true, false);
-                poly[idx] -= h;
-                worked = fx - fxh;
-                if (worked == 0) step_size[idx] *= 2;
-            }
-            do {
-                step_size[idx] *= 0.99;
-
-                const double h = step_size[idx];
-                poly[idx] += h;
-                double fxh = eval_poly_loss(poly, m_perspective_factors, m_poly_period, 300, true, false);
-                poly[idx] -= h;
-                worked = fx - fxh;
-            } while (worked != 0);
-            step_size[idx] /= 0.99;
-            step_size[idx] /= 10;
-            std::cout << step_size[idx] << std::endl;
-        }
-
-        double last_iter_loss = initial_loss;
-        int batch_size = 30;
-
-        int iter_number;
-        for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
-            if (batch_size != 300)
-                batch_size = std::min(300, (int) ((2 * (double) useless_iterations / (double) max_useless_iterations) *
-                                                  (300.0 - 30.0) + 30));
-
-            double fx = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size, true, true);
-
-            bool failed_iteration = true;
-            double new_loss;
-            print("--------------------------", iter_number, "-------------------------------------------------");
-            std::cout << std::endl;
-            for (int idx = 4; idx > 0; idx--) {
-                const double h = step_size[idx];
-
-                const double old_val = m_polynomial[idx]; //poly[idx] += h;
-                m_polynomial[idx] += h;
-                double fxh = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size, true, true);
-
-                // avoid precision errors
-                m_polynomial[idx] = old_val;
-
-                // poly[idx] -= h;
-
-                jac_polynomial[idx] = ((fxh - fx) / h);
-
-                // const int hidx = (++history_idx[idx]);
-                // history_idx[idx] = hidx % 20;
-                // history[idx][history_idx[idx]] = jac_polynomial[idx];
-
-                // double new_lr = 1e-18;
-                // for(int t = 0; t < 20; t++)
-                // new_lr += std::pow(history[idx][t], 2);
-                // const double ada = learning_rate[idx] / std::sqrt(new_lr);
-
-                // m_polynomial[idx] += ada * jac_polynomial[idx];
-
-                const double pre_step_loss = fx;
-                const double pre_step_poly = m_polynomial[idx];
-                const double old_velocity = velocity[idx];
-                velocity[idx] = gamma * velocity[idx] + learning_rate[idx] * (jac_polynomial[idx]);
-                print(idx, "\t", m_polynomial[idx], "\t-=\t", velocity[idx], "\t| ");
-                m_polynomial[idx] -= velocity[idx];
-
-                double saving = last_iter_loss;
-                new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, true, true);
-
-                saving -= new_loss;
-                std::cout << "cost: " << new_loss << " saved " << saving;
-                if (saving < -function_tolerance) {
-                    print("\t[STEPPING BACK] /2");
-                    print("\t", learning_rate[idx]);
-                    m_polynomial[idx] = pre_step_poly;
-                    // learning_rate[idx] = std::max(learning_rate[idx] * 0.5, std::pow(lr, 5-idx));
-                    learning_rate[idx] = std::max(learning_rate[idx] * 0.5, std::pow(lr, 5.0 - idx));
-                    ups[idx] = 0;
-                    downs[idx] += 1;
-                    // velocity[idx] = old_velocity;
-                    // velocity[idx] *= 0.5;
-                    new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, true, true);
-                } else {
-                    if (std::abs(saving) > function_tolerance) { // && std::abs(velocity[idx]) > 1e-6) {
-                        print("\t[SUCCESS] 1.4");
-                        failed_iteration = false;
-                    } else {
-                        print("\t[       ] 1.4");
-
-                    }
-                    print("\t", learning_rate[idx]);
-                    learning_rate[idx] *= 1.4;
-                    ups[idx] += 1;
-                    downs[idx] = 0;
-                    for (int other_idx = 1; other_idx < idx; other_idx++) learning_rate[other_idx] *= 1.2;
-                }
-                print("\t->", learning_rate[idx], "\t");
-                print("\t^", ups[idx], "\tv", downs[idx]);
-                std::cout << std::endl;
-            }
-            std::cout << "cost: " << new_loss << "\t TOTAL saved " << last_iter_loss - new_loss << "\t";
-            last_iter_loss = new_loss;
-
-            if (failed_iteration) {
-                useless_iterations++;
-                std::cout << "FAILED: " << useless_iterations;
-            } else {
-                useless_iterations = 0;
-            };
-            std::cout << std::endl;
-            if (useless_iterations > max_useless_iterations) {
-                std::cout << "Max useless iteration : " << useless_iterations << std::endl;
-                break;
-            }
-            // std::cout << std::endl;
-        }
-        double final_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, true, true);
-        // std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
-        return final_loss;
     }
 
     double Polyfit::fit_central(const int max_useless_iterations, const int max_num_iterations,
                                 const double function_tolerance) {
-        const double lr = 1e-3;
-        const double gamma = 0.9;
+        const bool skip_lateral_rows = true;
+        const bool sub_pixel_accuracy = true;
 
-        double poly[5];
-
-        double learning_rate[5] = {
-                0,
-                std::pow(lr, 4.0),
-                std::pow(lr, 3.0),
-                std::pow(lr, 2.0),
-                std::pow(lr, 1.0),
-        };
-        double initial_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, true, true);
-
-        // degree change
-        learning_rate[0] = 0;
+        double learning_rate[NR_POLY_PARAMETERS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        double initial_loss = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
 
         int useless_iterations = 0;
-        double jac_polynomial[5];
-        double velocity[5];
-        double history[5][20];
-        int history_idx[5];
-        double parameter_saving[5];
-        int downs[5];
-        int ups[5];
-        for (int idx = 1; idx < 5; idx++) velocity[idx] = 0;
-        for (int idx = 1; idx < 5; idx++) history_idx[idx] = -1;
-        for (int idx = 1; idx < 5; idx++) downs[idx] = 0;
-        for (int idx = 1; idx < 5; idx++) ups[idx] = 0;
-        for (int idx = 1; idx < 5; idx++) parameter_saving[idx] = function_tolerance;
-        for (int idx = 1; idx < 5; idx++) for (int t = 0; t < 20; t++) history[idx][t] = 0;
+        double jac_polynomial[NR_POLY_PARAMETERS];
+        double velocity[NR_POLY_PARAMETERS];
+
+        for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) velocity[idx] = 0;
+        for (int idx = 0; idx < PERSPECTIVE_OFFSET; idx++) learning_rate[idx] = std::pow(lr, (double) idx);
         double total_saving = 0;
 
-        double step_size[5];
-        init_step_size(step_size);
+        double step_size[NR_POLY_PARAMETERS];
+        init_step_size(step_size, skip_lateral_rows);
 
         double last_iter_loss = initial_loss;
-        int batch_size = 30;
+        int batch_size = m_image_height/10;
 
         int iter_number;
         for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
-            if (batch_size != 300)
-                batch_size = std::min(300, (int) ((2 * (double) useless_iterations / (double) max_useless_iterations) *
-                                                  (300.0 - 30.0) + 30));
 
-            double fx = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size, true, true);
+            if (batch_size != m_image_height)
+                batch_size = std::min(m_image_height, (int) ((2 * (double) useless_iterations / (double) max_useless_iterations) *
+                                                  (m_image_height - m_image_height/10) + m_image_height/10));
+
+            double fx = eval_poly_loss(m_parameters, batch_size, true, true);
 
             bool failed_iteration = true;
             double new_loss;
             print("--------------------------", iter_number, "-------------------------------------------------");
             std::cout << std::endl;
-            for (int idx = 4; idx > 0; idx--) {
+            for (int idx = 0; idx < PERSPECTIVE_OFFSET - 1; idx++) {
                 const double h = step_size[idx];
 
-                const double old_val = m_polynomial[idx]; //poly[idx] += h;
-                m_polynomial[idx] += h;
-                double fxh = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, batch_size, true, true);
+                const double old_val = m_parameters[idx];
+                m_parameters[idx] += h;
+                double fxh = eval_poly_loss(m_parameters, batch_size, true, true);
 
                 // avoid precision errors
-                m_polynomial[idx] = old_val;
+                m_parameters[idx] = old_val;
 
                 // poly[idx] -= h;
 
@@ -355,45 +189,41 @@ namespace crd_cpp {
                 // m_polynomial[idx] += ada * jac_polynomial[idx];
 
                 const double pre_step_loss = fx;
-                const double pre_step_poly = m_polynomial[idx];
+                const double pre_step_poly = m_parameters[idx];
                 const double old_velocity = velocity[idx];
                 velocity[idx] = gamma * velocity[idx] + learning_rate[idx] * (jac_polynomial[idx]);
-                print(idx, "\t", m_polynomial[idx], "\t-=\t", velocity[idx], "\t| ");
-                m_polynomial[idx] -= velocity[idx];
+                print(idx, "\t", m_parameters[idx], "\t-=\t", velocity[idx], "\t| ");
+                m_parameters[idx] -= velocity[idx];
 
                 double saving = last_iter_loss;
-                new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, true, true);
+                new_loss = eval_poly_loss(m_parameters, m_image_height, true, true);
 
                 saving -= new_loss;
                 std::cout << "cost: " << new_loss << " saved " << saving;
                 if (saving < -function_tolerance) {
-                    print("\t[STEPPING BACK] /2");
-                    print("\t", learning_rate[idx]);
-                    m_polynomial[idx] = pre_step_poly;
+                    print("\t[STEPPING BACK] /2", "\t", learning_rate[idx]);
+
+                    m_parameters[idx] = pre_step_poly;
                     // learning_rate[idx] = std::max(learning_rate[idx] * 0.5, std::pow(lr, 5-idx));
                     learning_rate[idx] = std::max(learning_rate[idx] * 0.5, std::pow(lr, 5.0 - idx));
-                    ups[idx] = 0;
-                    downs[idx] += 1;
                     // velocity[idx] = old_velocity;
                     // velocity[idx] *= 0.5;
-                    new_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, true, true);
+                    new_loss = eval_poly_loss(m_parameters, 300, true, true);
                 } else {
                     if (std::abs(saving) > function_tolerance) { // && std::abs(velocity[idx]) > 1e-6) {
                         print("\t[SUCCESS] 1.4");
                         failed_iteration = false;
-                        idx = idx + 1;
+                        idx = idx - 1;
                     } else {
                         print("\t[       ] 1.4");
 
                     }
                     print("\t", learning_rate[idx]);
                     learning_rate[idx] *= 1.4;
-                    ups[idx] += 1;
-                    downs[idx] = 0;
+                    // TODO: try to reinitialize here
                     for (int other_idx = 1; other_idx < idx; other_idx++) learning_rate[other_idx] *= 1.2;
                 }
                 print("\t->", learning_rate[idx], "\t");
-                print("\t^", ups[idx], "\tv", downs[idx]);
                 std::cout << std::endl;
             }
             std::cout << "cost: " << new_loss << "\t TOTAL saved " << last_iter_loss - new_loss << "\t";
@@ -412,26 +242,32 @@ namespace crd_cpp {
             }
             // std::cout << std::endl;
         }
-        double final_loss = eval_poly_loss(m_polynomial, m_perspective_factors, m_poly_period, 300, true, true);
+        double final_loss = eval_poly_loss(m_parameters, m_image_height, true, true);
         // std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
         return final_loss;
     }
 
-    const double *Polyfit::init_step_size(double step_size[5]) {
-        double poly[5];
+    const double *Polyfit::init_step_size(double* step_size, bool skip_lateral_rows) {
+        double params[NR_POLY_PARAMETERS];
+        const bool sub_pixel_accuracy = false;
 
-        for (int idx = 1; idx < 5; idx++) poly[idx] = m_polynomial[idx];
-        for (int idx = 1; idx < 5; idx++) step_size[idx] = 1e-33 + std::abs(m_polynomial[idx]) * 1e-10;
+        // degree chagne
+        size_t nr_parameters = skip_lateral_rows? PERSPECTIVE_OFFSET - 1: NR_POLY_PARAMETERS;
 
-        for (int idx = 1; idx < 5; idx++) {
-            double fx = eval_poly_loss(poly, m_perspective_factors, m_poly_period, 300, true, false);
+        for (int idx = 0; idx < nr_parameters; idx++) params[idx] = m_parameters[idx];
+        // initialize with a small value scaled by the current value or 1e-33
+        for (int idx = 0; idx < nr_parameters; idx++) step_size[idx] = 1e-33 + std::abs(m_parameters[idx]) * 1e-10;
+
+
+        for (int idx = 0; idx < nr_parameters; idx++) {
+            double fx = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
             double worked = 0;
             // std::cout << idx << " " << step_size[idx] << " to ";
             while (worked == 0) {
                 const double h = step_size[idx];
-                poly[idx] += h;
-                double fxh = eval_poly_loss(poly, m_perspective_factors, m_poly_period, 300, true, false);
-                poly[idx] -= h;
+                params[idx] += h;
+                double fxh = eval_poly_loss(params, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+                params[idx] -= h;
                 worked = fx - fxh;
                 if (worked == 0) {
                     step_size[idx] *= 2;
@@ -440,9 +276,9 @@ namespace crd_cpp {
             do {
                 step_size[idx] *= 0.99;
                 const double h = step_size[idx];
-                poly[idx] += h;
-                double fxh = eval_poly_loss(poly, m_perspective_factors, m_poly_period, 300, true, false);
-                poly[idx] -= h;
+                params[idx] += h;
+                double fxh = eval_poly_loss(params, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+                params[idx] -= h;
                 worked = fx - fxh;
             } while (worked != 0);
             step_size[idx] /= 0.99;
@@ -452,31 +288,32 @@ namespace crd_cpp {
         return step_size;
     }
 
-    double Polyfit::eval_poly_loss(const double *poly, const double *perspect, const double period, int batch_size,
-                                   const bool only_central, const bool sub_pixel) {
-        int poly_idx_min = -1;
-        int poly_idx_max = 1;
+    double Polyfit::eval_poly_loss(const double* parameters, int batch_size, const bool only_central, const bool sub_pixel) {
+        int indexes[batch_size];
+        int poly_idx_min;
+        int poly_idx_max;
+
         if (only_central) {
-            // consider only center row
             poly_idx_min = 0;
             poly_idx_max = 0;
-        }
-        int indexes[batch_size];
-
-        std::uniform_int_distribution<> dis(0, 300);
-        std::default_random_engine generator;
-        generator.seed((unsigned int) std::time(NULL));
-
-        if (batch_size == 300) {
-            for (int idx = 0; idx < batch_size; idx++)
-                indexes[idx] = idx;
         } else {
-            auto pick = dis(generator);
+            poly_idx_min = -1;
+            poly_idx_max = 1;
+        }
+
+        std::uniform_int_distribution<> dis(0, m_image_height);
+        std::default_random_engine generator;
+
+        if (batch_size == m_image_height) {
+            for (int idx = 0; idx < batch_size; idx++) indexes[idx] = idx;
+        } else {
+            // TODO pick without replacement
+            generator.seed((unsigned int) std::time(NULL));
+            // auto pick = dis(generator);
             for (int idx = 0; idx < batch_size; idx++) {
                 indexes[idx] = dis(generator);
             }
         }
-
 
         double cost = 0;
         double intensity;
@@ -484,8 +321,14 @@ namespace crd_cpp {
             int row_num = indexes[idx];
 
             for (int poly_idx = poly_idx_min; poly_idx <= poly_idx_max; poly_idx++) {
-                const double column = eval_poly_double(row_num, poly_idx, poly, perspect, &period);
-                if (column < 0 || column > 398 || period < 10) {
+                double column;
+                if(only_central)
+                    column = eval_poly_central(row_num, poly_idx, parameters);
+                else{
+                    column = eval_poly_double(row_num, poly_idx, parameters);
+                }
+
+                if (column < 0 || column > m_image_width || (!only_central && parameters[PERIOD_OFFSET] < 10)) {
                     cost += 1;
                 } else {
                     const int left = (const int) floor(column);
@@ -500,8 +343,8 @@ namespace crd_cpp {
                 }
             }
         }
-        cost /= batch_size * (poly_idx_max - poly_idx_min + 1);
-        cost *= (300 / batch_size);
+        cost /= batch_size * (poly_idx_max - poly_idx_min + 1); // normalize horizontally
+        cost *= (m_image_height / batch_size); // normalize vertically
         return cost;
     }
 
@@ -529,7 +372,7 @@ namespace crd_cpp {
                 // cost_function = PointResidual::Create(row_num, crop_row_center + poly_idx * crop_row_period, poly_idx);
                 cost_function = PointResidual::Create(row_num, crop_row_center + poly_idx * crop_row_period +
                                                                distribution(generator), poly_idx);
-                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+                m_problem.AddResidualBlock(cost_function, NULL, m_parameters);
             }
         }
         ceres::Solve(m_options, &m_problem, &m_summary);
@@ -556,7 +399,7 @@ namespace crd_cpp {
                 auto p = m_crop_row_points.at((size_t) (row_num * 3 + (1 + poly_idx)));
                 cost_function = PointResidual::Create(p.y + distribution(generator), p.x + distribution(generator),
                                                       poly_idx);
-                m_problem.AddResidualBlock(cost_function, NULL, m_polynomial, m_perspective_factors, &m_poly_period);
+                m_problem.AddResidualBlock(cost_function, NULL, m_parameters);
             }
         }
         ceres::Solve(m_options, &m_problem, &m_summary);
@@ -564,12 +407,12 @@ namespace crd_cpp {
 
     void Polyfit::plot_fitted_polys(std::string suffix) {
         std::cout << "[plotting]: " << suffix << std::endl;
-        cv::Mat img = m_image.clone();
+        cv::Mat img = m_drawable_image.clone();
         cv::Scalar_<double> color;
 
         for (int image_row_num = 0; image_row_num < m_image_height; image_row_num++) {
             for (int poly_idx = -2; poly_idx < 4; poly_idx++) {
-                int column = eval_poly(image_row_num, poly_idx);
+                int column = eval_poly(image_row_num, poly_idx, m_parameters);
 
                 if (std::abs(poly_idx) < 2)
                     color = cv::Scalar(0, 0, 255);
@@ -589,33 +432,41 @@ namespace crd_cpp {
         // cv::destroyAllWindows();
     }
 
-    const int Polyfit::eval_poly(int image_row_num, int poly_idx, const double polynomial[5],
-                                 const double perspective_factors[8], const double *poly_period) {
-        return (int) eval_poly_double(image_row_num, poly_idx, polynomial, perspective_factors, poly_period);
+    const int Polyfit::eval_poly(int image_row_num, int poly_idx, const double *params) {
+        return (int) eval_poly_double(image_row_num, poly_idx, params);
     }
 
-    const double Polyfit::eval_poly_double(int image_row_num, int poly_idx, const double *polynomial,
-                                           const double *perspective_factors, const double *poly_period) {
+    const double Polyfit::eval_poly_double(int image_row_num, int poly_idx, const double *params) {
         double column;
-        double poly_origin = polynomial[4] + *(poly_period) * poly_idx;
+        double poly_origin = params[0] + params[Polyfit::PERIOD_OFFSET] * poly_idx;
         column = (
                 // degree change
-                // // (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(image_row_num, 4)
-                +(perspective_factors[3] + poly_origin * perspective_factors[2]) * polynomial[1] * pow(image_row_num, 3)
-                +
-                (perspective_factors[5] + poly_origin * perspective_factors[4]) * polynomial[2] * pow(image_row_num, 2)
-                + (perspective_factors[7] + poly_origin * perspective_factors[6]) * polynomial[3] * image_row_num
-                + polynomial[4]
-                + poly_idx * *(poly_period)
+                //  (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
+                // + (params[Polyfit::PERSPECTIVE_OFFSET][7] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET][2]) * params[3] * pow(T(image_row_num), 3)
+                + (params[Polyfit::PERSPECTIVE_OFFSET+5] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+4]) * params[3] * pow(image_row_num, 3)
+                + (params[Polyfit::PERSPECTIVE_OFFSET+3] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+2]) * params[2] * pow(image_row_num, 2)
+                + (params[Polyfit::PERSPECTIVE_OFFSET+1] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+0]) * params[1] * pow(image_row_num, 1)
+                + params[0]
+                + poly_idx * params[Polyfit::PERIOD_OFFSET]
+        );
+        return column;
+    }
+    const double Polyfit::eval_poly_central(int image_row_num, int poly_idx, const double *params) {
+        double column;
+        column = (
+                // degree change
+                //  (perspective_factors[1] + poly_origin * perspective_factors[0]) * polynomial[0] * pow(T(image_row_num), 4)
+                // + (params[Polyfit::PERSPECTIVE_OFFSET][7] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET][2]) * params[3] * pow(T(image_row_num), 3)
+                + params[3] * pow(image_row_num, 3)
+                + params[2] * pow(image_row_num, 2)
+                + params[1] * pow(image_row_num, 1)
+                + params[0]
+                + poly_idx * params[Polyfit::PERIOD_OFFSET]
         );
         return column;
     }
 
-    int Polyfit::eval_poly(int image_row_num, int poly_idx) {
-        return eval_poly(image_row_num, poly_idx, m_polynomial, m_perspective_factors, &m_poly_period);
-    }
-
-    double Polyfit::fit(cv::Mat new_frame, const int max_iter, const int max_useless) {
+    double Polyfit::fit(cv::Mat new_frame, const int max_iter, const int max_useless, double function_tolerance) {
         /*
         cv::Mat optical_flow = calculate_flow(new_frame);
         for (cv::Point2f &p: m_crop_row_points) {
@@ -628,8 +479,7 @@ namespace crd_cpp {
 
         // plot_fitted_polys("fit post opt flow effect");
          */
-        m_intensity_map = new_frame;
-        double cost = fit_poly_on_image(max_iter, max_useless);
+        double cost = fit_poly_on_image(new_frame, max_iter, max_useless, function_tolerance);
         return cost;
     }
 
@@ -721,6 +571,6 @@ namespace crd_cpp {
             }
         }
         return flow_img;
-    };
+    }
 }
 

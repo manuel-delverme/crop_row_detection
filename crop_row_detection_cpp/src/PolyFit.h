@@ -18,16 +18,6 @@ namespace crd_cpp {
     class Polyfit {
     private:
 
-        void draw_crop(const double *polynomial, const double *perspective_factors, const cv::Mat &drawImg_, double x0,
-                       int image_row_num);
-
-        void plot_crop_points(std::string suffix);
-
-        void plot_polys(const cv::Mat &inpImg_, const double *polynomial, const double *perspective_factors,
-                        double poly_period, const cv::Mat drawImg_, int poly_origin_center, double poly_origin_period);
-
-        int eval_poly(int image_row_num, int poly_idx);
-
         void plot_fitted_polys(std::string suffix);
 
         cv::Mat
@@ -35,69 +25,52 @@ namespace crd_cpp {
 
         void fit_poly_on_points(std::vector<crd_cpp::old_tuple_type> points, double std, double mean);
 
-        void add_noise_to_polys(double std);
-
         cv::Mat calculate_flow(const cv::Mat &new_frame);
 
-        void calculate_poly_points();
+        double fit_poly_on_image(const cv::Mat &new_frame, const int max_num_iterations, const int max_useless_iterations, const double function_tolerance);
 
-        double fit_poly_on_image(const int max_num_iterations, const int max_useless_iterations);
-
-        double eval_poly_loss(const double *poly, const double *perspect, const double period, const int margin,
-                              const bool only_central, const bool sub_pixel);
+        double eval_poly_loss(const double* m_parameters, int batch_size, const bool only_central, const bool sub_pixel);
 
         double
         fit_central(const int max_useless_iterations, const int max_num_iterations, const double function_tolerance);
-
         double fit_perspective(const int max_useless_iterations, const int max_num_iterations,
                                const double function_tolerance);
 
         cv::Mat m_intensity_map;
 
-        /*
-        double m_parameters = {
+        double m_parameters[5+8+1] = {
                 0, 0, 0, 0, 0, // polynomial
                 .01, .01, .01, .01, .01, .01, .01, .01, // perspective
                 100, // period
         };
-         */
-        double m_polynomial[5] = {0, 0, 0, 0, 0}; // polynomial
-        double m_perspective_factors[8] = {.01, .01, .01, .01, .01, .01, .01, .01}; // perspective
-        double m_poly_period = 100; // period
-        const size_t PERSPECTIVE_OFFSET = 5;
-        const size_t PERIOD_OFFSET = 14;
-
-        double m_best_polynomial[5] = {0, 0, 0, 0, 0};
-        double m_best_perspective_factors[8] = {.01, .01, .01, .01, .01, .01, .01, .01};
-        double m_best_poly_period = 100;
 
         std::vector<cv::Point2f> m_crop_row_points;
-        cv::Mat m_spammable_img;
 
         void fit_poly_on_points();
-
         int m_image_center;
         int m_image_height;
-        double m_mean;
+        int m_image_width;
+        const double lr = 1e-3;
+        const double gamma = 0.9;
 
-        const double *init_step_size(double *step_size);
+        const double *init_step_size(double* step_size, bool skip_lateral_rows);
 
     public:
-        cv::Mat m_image;
+        const static size_t PERSPECTIVE_OFFSET = 5;
+        const static size_t PERIOD_OFFSET = 8+5;
+        const static size_t NR_POLY_PARAMETERS = 8+5+1;
+        cv::Mat m_drawable_image;
 
-        static const int eval_poly(int image_row_num, int poly_idx, const double m_polynomial[5],
-                                   const double m_perspective_factors[8], const double *m_poly_period);
-
-        static const double eval_poly_double(int image_row_num, int poly_idx, const double m_polynomial[5],
-                                             const double m_perspective_factors[8], const double *m_poly_period);
+        static const int eval_poly(int image_row_num, int poly_idx, const double *params);
+        static const double eval_poly_double(int image_row_num, int poly_idx, const double *params);
+        const double eval_poly_central(int image_row_num, int poly_idx, const double *params);
 
         Polyfit(cv::Mat &intensity_map, cv::Mat out_img, const int max_num_iterations,
-                const int max_useless_iterations);
+                const int max_useless_iterations, const double function_tolerance);
 
-        double fit(cv::Mat new_frame, const int max_num_iterations, const int max_useless_iterations);
+        double fit(cv::Mat new_frame, const int max_num_iterations, const int max_useless_iterations, const double function_tolerance);
 
         void add_noise();
-
         void test_noise(const int max_num_iterations, const int max_useless_iterations, clock_t start);
     };
 }
