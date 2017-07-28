@@ -53,8 +53,8 @@ int main(int argc, char **argv) {
     cv::Mat out_image;
     cv::cvtColor(intensityImage, out_image, cv::COLOR_GRAY2BGR);
     // crd_cpp::plot_template_matching(intensityImage, min_energy_results, out_image);
-
      */
+
     std::cout << ">fitting initial guess" << std::endl;
     crd_cpp::Polyfit polyfit(img, intensityImage, atoi(argv[2]), atoi(argv[3]), 1e-7);
 

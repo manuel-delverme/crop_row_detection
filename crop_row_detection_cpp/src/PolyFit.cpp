@@ -124,8 +124,126 @@ namespace crd_cpp {
     double Polyfit::fit_poly_on_image(const cv::Mat &new_frame, const int max_num_iterations, const int max_useless_iterations, const double function_tolerance) {
         m_intensity_map = new_frame;
         double central_loss = fit_central(max_useless_iterations, max_num_iterations, function_tolerance);
-        // double total_loss = fit_perspective(max_useless_iterations, max_num_iterations, 1e-6);
+        double total_loss = fit_perspective(max_useless_iterations, max_num_iterations, function_tolerance);
         return central_loss;
+    }
+
+    double Polyfit::fit_perspective(const int max_useless_iterations, const int max_num_iterations,
+                                const double function_tolerance) {
+
+        const bool skip_lateral_rows = false;
+        const bool sub_pixel_accuracy = true;
+
+        double learning_rate[NR_POLY_PARAMETERS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        double initial_loss = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+
+        int useless_iterations = 0;
+        double jac_polynomial[NR_POLY_PARAMETERS];
+        double velocity[NR_POLY_PARAMETERS];
+
+        for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) velocity[idx] = 0;
+        for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) learning_rate[idx] = std::pow(lr, (double) idx);
+
+        double step_size[NR_POLY_PARAMETERS];
+        init_step_size(step_size, skip_lateral_rows);
+
+        double last_iter_loss = initial_loss;
+        int batch_size = m_image_height/10;
+
+        int iter_number;
+        for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
+
+            if (batch_size != m_image_height)
+                batch_size = std::min(m_image_height, (int) ((2 * (double) useless_iterations / (double) max_useless_iterations) *
+                                                             (m_image_height - m_image_height/10) + m_image_height/10));
+
+            double fx = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+
+            bool failed_iteration = true;
+            double new_loss;
+            print("--------------------------", iter_number, "-------------------------------------------------");
+            std::cout << std::endl;
+            int next_idx;
+            for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) {
+                const double h = step_size[idx];
+
+                const double old_val = m_parameters[idx];
+                m_parameters[idx] += h;
+                double fxh = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+                m_parameters[idx] = old_val;
+
+                jac_polynomial[idx] = ((fxh - fx) / h);
+
+                /*
+                // const int hidx = (++history_idx[idx]);
+                // history_idx[idx] = hidx % 20;
+                // history[idx][history_idx[idx]] = jac_polynomial[idx];
+
+                // double new_lr = 1e-18;
+                // for(int t = 0; t < 20; t++)
+                // new_lr += std::pow(history[idx][t], 2);
+                // const double ada = learning_rate[idx] / std::sqrt(new_lr);
+
+                // m_polynomial[idx] += ada * jac_polynomial[idx];
+                */
+
+                const double pre_step_poly = m_parameters[idx];
+                const double old_velocity = velocity[idx];
+                velocity[idx] = gamma * velocity[idx] + learning_rate[idx] * (jac_polynomial[idx]);
+                print(idx, "\t", m_parameters[idx], "\t-=\t", velocity[idx], "\t| ");
+                m_parameters[idx] -= velocity[idx];
+
+                double saving = last_iter_loss;
+                new_loss = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+
+                saving -= new_loss;
+                std::cout << "cost: " << new_loss << " saved " << saving;
+                next_idx = idx;
+                if (saving < -function_tolerance) {
+                    print("\t[STEPPING BACK] /2", "\t", learning_rate[idx]);
+
+                    m_parameters[idx] = pre_step_poly;
+                    // learning_rate[idx] = std::max(learning_rate[idx] * 0.5, std::pow(lr, 5-idx));
+                    learning_rate[idx] = std::max(learning_rate[idx] * 0.5, std::pow(lr, 5.0 - idx));
+                    // velocity[idx] = old_velocity;
+                    // velocity[idx] *= 0.5;
+                    new_loss = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+                } else {
+                    if (std::abs(saving) > function_tolerance) { // && std::abs(velocity[idx]) > 1e-6) {
+                        failed_iteration = false;
+                        print("\t[SUCCESS] 1.4");
+                        next_idx = idx - 1;
+                    } else {
+                        print("\t[       ] 1.4");
+                    }
+                    print("\t", learning_rate[idx]);
+                    learning_rate[idx] *= 1.4;
+                    // TODO: try to reinitialize here
+                    for (int other_idx = 1; other_idx < idx; other_idx++) learning_rate[other_idx] *= 1.2;
+                }
+                print("\t->", learning_rate[idx], "\t");
+                idx = next_idx;
+                std::cout << std::endl;
+            }
+            std::cout << "cost: " << new_loss << "\t TOTAL saved " << last_iter_loss - new_loss << "\t";
+            last_iter_loss = new_loss;
+
+            if (failed_iteration) {
+                useless_iterations++;
+                std::cout << "FAILED: " << useless_iterations;
+            } else {
+                useless_iterations = 0;
+            };
+            std::cout << std::endl;
+            if (useless_iterations > max_useless_iterations) {
+                std::cout << "Max useless iteration : " << useless_iterations << std::endl;
+                break;
+            }
+            // std::cout << std::endl;
+        }
+        double final_loss = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+        // std::cout << "FIRST STEP: loss: " << final_loss << " iters: " << iter_number << std::endl;
+        return final_loss;
     }
 
     double Polyfit::fit_central(const int max_useless_iterations, const int max_num_iterations,
@@ -328,7 +446,8 @@ namespace crd_cpp {
                     column = eval_poly_double(row_num, poly_idx, parameters);
                 }
 
-                if (column < 0 || column > m_image_width || (!only_central && parameters[PERIOD_OFFSET] < 10)) {
+                // replace isnan with column != column
+                if (column < 0 || column > m_image_width || isnan(column) || (!only_central && parameters[PERIOD_OFFSET] < 10)) {
                     cost += 1;
                 } else {
                     const int left = (const int) floor(column);
@@ -461,7 +580,6 @@ namespace crd_cpp {
                 + params[2] * pow(image_row_num, 2)
                 + params[1] * pow(image_row_num, 1)
                 + params[0]
-                + poly_idx * params[Polyfit::PERIOD_OFFSET]
         );
         return column;
     }
