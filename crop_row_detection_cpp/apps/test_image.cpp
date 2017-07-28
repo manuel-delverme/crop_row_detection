@@ -7,6 +7,7 @@
 #include <ImagePreprocessor.h>
 
 #include <ceres/ceres.h>
+#include "../src/PolyFit.h"
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -60,6 +61,5 @@ int main(int argc, char **argv) {
     // teardown cpp
     std::cout << "teardown" << std::endl;
     row_detector.teardown();
-
     return 0;
 }

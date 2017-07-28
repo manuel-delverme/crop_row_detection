@@ -30,20 +30,20 @@ include_directories(
 
 aux_source_directory( src CROP_ROW_DETECTION_SRC )
 
-add_library(crop_row_detection STATIC ${CROP_ROW_DETECTION_SRC})
+add_library(crop_row_detection STATIC ${CROP_ROW_DETECTION_SRC} src/PolyFit.cpp src/PolyFit.h)
 set_target_properties(crop_row_detection PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 target_link_libraries( crop_row_detection
                        ${OpenCV_LIBS}
                        ${CERES_LIBRARIES})
 
-add_executable(test_video apps/test_video.cpp)
+add_executable(test_video apps/test_video.cpp src/PolyFit.cpp src/PolyFit.h)
 target_link_libraries( test_video
                        crop_row_detection
                        ${OpenCV_LIBS}
                        ${CERES_LIBRARIES})
 set_target_properties( test_video PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
-add_executable(test_image apps/test_image.cpp)
+add_executable(test_image apps/test_image.cpp src/PolyFit.cpp src/PolyFit.h)
 target_link_libraries( test_image
                        crop_row_detection
                        ${OpenCV_LIBS}
