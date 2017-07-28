@@ -142,7 +142,6 @@ namespace crd_cpp {
 
         for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) velocity[idx] = 0;
         for (int idx = 0; idx < PERSPECTIVE_OFFSET; idx++) learning_rate[idx] = std::pow(lr, (double) idx);
-        double total_saving = 0;
 
         double step_size[NR_POLY_PARAMETERS];
         init_step_size(step_size, skip_lateral_rows);
@@ -163,6 +162,7 @@ namespace crd_cpp {
             double new_loss;
             print("--------------------------", iter_number, "-------------------------------------------------");
             std::cout << std::endl;
+            int next_idx;
             for (int idx = 0; idx < PERSPECTIVE_OFFSET - 1; idx++) {
                 const double h = step_size[idx];
 
@@ -188,7 +188,6 @@ namespace crd_cpp {
 
                 // m_polynomial[idx] += ada * jac_polynomial[idx];
 
-                const double pre_step_loss = fx;
                 const double pre_step_poly = m_parameters[idx];
                 const double old_velocity = velocity[idx];
                 velocity[idx] = gamma * velocity[idx] + learning_rate[idx] * (jac_polynomial[idx]);
@@ -200,6 +199,7 @@ namespace crd_cpp {
 
                 saving -= new_loss;
                 std::cout << "cost: " << new_loss << " saved " << saving;
+                next_idx = idx;
                 if (saving < -function_tolerance) {
                     print("\t[STEPPING BACK] /2", "\t", learning_rate[idx]);
 
@@ -211,12 +211,11 @@ namespace crd_cpp {
                     new_loss = eval_poly_loss(m_parameters, 300, true, true);
                 } else {
                     if (std::abs(saving) > function_tolerance) { // && std::abs(velocity[idx]) > 1e-6) {
-                        print("\t[SUCCESS] 1.4");
                         failed_iteration = false;
-                        idx = idx - 1;
+                        print("\t[SUCCESS] 1.4");
+                        next_idx = idx - 1;
                     } else {
                         print("\t[       ] 1.4");
-
                     }
                     print("\t", learning_rate[idx]);
                     learning_rate[idx] *= 1.4;
@@ -224,6 +223,7 @@ namespace crd_cpp {
                     for (int other_idx = 1; other_idx < idx; other_idx++) learning_rate[other_idx] *= 1.2;
                 }
                 print("\t->", learning_rate[idx], "\t");
+                idx = next_idx;
                 std::cout << std::endl;
             }
             std::cout << "cost: " << new_loss << "\t TOTAL saved " << last_iter_loss - new_loss << "\t";
@@ -311,7 +311,7 @@ namespace crd_cpp {
             generator.seed((unsigned int) std::time(NULL));
             // auto pick = dis(generator);
             for (int idx = 0; idx < batch_size; idx++) {
-                indexes[idx] = dis(generator);
+                indexes[idx] = dis(generator); // TODO: sort to avoid cache misses
             }
         }
 
