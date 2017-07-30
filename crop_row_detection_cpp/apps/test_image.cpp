@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     cv::Size image_size = cv::Size(400, 300);
 
     std::cout << "loading" << std::endl;
-    row_detector.pre_alloc(image_size);
+    // row_detector.pre_alloc(image_size);
     std::cout << "loaded" << std::endl;
 
     crd_cpp::ImagePreprocessor preprocessor(image_size);
@@ -60,6 +60,6 @@ int main(int argc, char **argv) {
 
     // teardown cpp
     std::cout << "teardown" << std::endl;
-    row_detector.teardown();
+    // row_detector.teardown();
     return 0;
 }

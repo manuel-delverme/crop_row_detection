@@ -32,15 +32,17 @@ namespace crd_cpp {
         double eval_poly_loss(const double* m_parameters, int batch_size, const bool only_central, const bool sub_pixel);
 
         double
-        fit_central(const int max_useless_iterations, const int max_num_iterations, const double function_tolerance);
-        double fit_perspective(const int max_useless_iterations, const int max_num_iterations,
-                               const double function_tolerance);
+        fit_central(const int max_useless_iterations, const int max_num_iterations, const double function_tolerance,
+                    const int thread_idx);
+        double
+        fit_full(const int max_useless_iterations, const int max_num_iterations, const double function_tolerance,
+        const int thread_idx);
 
         cv::Mat m_intensity_map;
 
-        double m_parameters[5+8+1] = {
-                0, 0, 0, 0, 0, // polynomial
-                .01, .01, .01, .01, .01, .01, .01, .01, // perspective
+        double m_parameters[4+6+1] = {
+                0, 0, 0, 0, // polynomial
+                .01, .01, .01, .01, .01, .01, // perspective
                 100, // period
         };
 
@@ -50,15 +52,23 @@ namespace crd_cpp {
         int m_image_center;
         int m_image_height;
         int m_image_width;
-        const double lr = 1e-3;
+        const double lr = 1e-1;
         const double gamma = 0.9;
 
         const double *init_step_size(double* step_size, bool skip_lateral_rows);
+        cv::Mat m_gaussian_3_intensity_map;
+        cv::Mat m_gaussian_6_intensity_map;
+        cv::Mat m_gaussian_9_intensity_map;
 
     public:
-        const static size_t PERSPECTIVE_OFFSET = 5;
-        const static size_t PERIOD_OFFSET = 8+5;
-        const static size_t NR_POLY_PARAMETERS = 8+5+1;
+        const static int NR_THREADS = 4;
+        const static int PERSPECTIVE_OFFSET = 4;
+        const static int PERIOD_OFFSET = 2*(PERSPECTIVE_OFFSET - 1) + PERSPECTIVE_OFFSET;
+        const static int NR_POLY_PARAMETERS = PERIOD_OFFSET + 1;
+
+        double m_thread_parameters[NR_THREADS][NR_POLY_PARAMETERS];
+        double m_thread_losses[NR_THREADS];
+
         cv::Mat m_drawable_image;
 
         static const int eval_poly(int image_row_num, int poly_idx, const double *params);
