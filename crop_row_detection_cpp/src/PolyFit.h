@@ -29,8 +29,6 @@ namespace crd_cpp {
 
         double fit_poly_on_image(const cv::Mat &new_frame, const int max_num_iterations, const int max_useless_iterations, const double function_tolerance);
 
-        double eval_poly_loss(const double* m_parameters, int batch_size, const bool only_central, const bool sub_pixel);
-
         double
         fit_central(const int max_useless_iterations, const int max_num_iterations, const double function_tolerance,
                     const int thread_idx);
@@ -59,6 +57,7 @@ namespace crd_cpp {
         cv::Mat m_gaussian_3_intensity_map;
         cv::Mat m_gaussian_6_intensity_map;
         cv::Mat m_gaussian_9_intensity_map;
+        double eval_poly_loss(const double* m_parameters, int batch_size, const bool only_central, const bool sub_pixel);
 
     public:
         const static int NR_THREADS = 4;
@@ -69,19 +68,24 @@ namespace crd_cpp {
         double m_thread_parameters[NR_THREADS][NR_POLY_PARAMETERS];
         double m_thread_losses[NR_THREADS];
 
+        cv::Mat m_original_image;
         cv::Mat m_drawable_image;
 
         static const int eval_poly(int image_row_num, int poly_idx, const double *params);
         static const double eval_poly_double(int image_row_num, int poly_idx, const double *params);
         const double eval_poly_central(int image_row_num, int poly_idx, const double *params);
 
-        Polyfit(cv::Mat &intensity_map, cv::Mat out_img, const int max_num_iterations,
+        Polyfit(cv::Mat &intensity_map,
+                cv::Mat out_img,
+                std::vector<old_tuple_type> ground_truth,
+                const int max_num_iterations,
                 const int max_useless_iterations, const double function_tolerance);
 
         double fit(cv::Mat new_frame, const int max_num_iterations, const int max_useless_iterations, const double function_tolerance);
 
         void add_noise();
         void test_noise(const int max_num_iterations, const int max_useless_iterations, clock_t start);
+        static double static_eval_poly_loss(const double* m_parameters, int batch_size, const bool only_central, const bool sub_pixel, cv::Mat image);
     };
 }
 

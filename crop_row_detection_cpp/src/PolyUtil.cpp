@@ -31,7 +31,7 @@ namespace crd_cpp {
     class PointResidual {
     public:
         static ceres::CostFunction *Create(double x, double y, int poly_idx) {
-            return (new ceres::AutoDiffCostFunction<PointResidual, Polyfit::NR_POLY_PARAMETERS, 1>(
+            return (new ceres::AutoDiffCostFunction<PointResidual, 1, Polyfit::NR_POLY_PARAMETERS>(
                     new PointResidual(x, y, poly_idx)));
         }
 
@@ -68,24 +68,6 @@ namespace crd_cpp {
         double poly_idx_;
     };
 
-    /*
-    void Polyfit::test_noise(const cv::Mat &intensity_map, const int max_num_iterations, const int max_useless_iterations, double min_score) {
-        clock_t start;
-        for (int mean = 0; mean < 100; mean += 10) {
-            for (int stdev = 0; stdev < 100; stdev += 10) {
-                // fit_poly_on_points(ground_truth, mean, stdev);
-                plot_fitted_polys("initial fit" + std::__cxx11::to_string(mean) + "," + std::__cxx11::to_string(stdev));
-                start = clock();
-                assert("DISABLED" == "FIXME");
-                double cost = 1;// fit_poly_on_image(intensity_map, max_num_iterations, max_useless_iterations);
-                std::cout << cost << "; fit time: " << (clock() - start) / (double) (CLOCKS_PER_SEC / 1000)
-                          << " ms" << std::endl;
-                plot_fitted_polys("imap fit" + std::__cxx11::to_string(mean) + "," + std::__cxx11::to_string(stdev));
-            }
-        }
-    }
-    */
-
     const double *Polyfit::init_step_size(double* step_size, bool skip_lateral_rows) {
         double params[NR_POLY_PARAMETERS];
         const bool sub_pixel_accuracy = false;
@@ -93,20 +75,21 @@ namespace crd_cpp {
         // degree chagne
         size_t nr_parameters = skip_lateral_rows? PERSPECTIVE_OFFSET : NR_POLY_PARAMETERS;
 
-        for (int idx = 0; idx < nr_parameters; idx++) params[idx] = m_parameters[idx];
+        for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) params[idx] = m_parameters[idx];
         // initialize with a small value scaled by the current value or 1e-33
         for (int idx = 0; idx < nr_parameters; idx++) step_size[idx] = 1e-33 + std::abs(m_parameters[idx]) * 1e-10;
 
 
         for (int idx = 0; idx < nr_parameters; idx++) {
-            double fx = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+            double fx = eval_poly_loss(params, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
             double worked = 0;
+            const double xi = params[idx];
             // std::cout << idx << " " << step_size[idx] << " to ";
             while (worked == 0) {
                 const double h = step_size[idx];
                 params[idx] += h;
                 double fxh = eval_poly_loss(params, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
-                params[idx] -= h;
+                params[idx] = xi;
                 worked = fx - fxh;
                 if (worked == 0) {
                     step_size[idx] *= 2;
@@ -117,7 +100,7 @@ namespace crd_cpp {
                 const double h = step_size[idx];
                 params[idx] += h;
                 double fxh = eval_poly_loss(params, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
-                params[idx] -= h;
+                params[idx] = xi;
                 worked = fx - fxh;
             } while (worked != 0);
             step_size[idx] /= 0.99;
@@ -156,35 +139,8 @@ namespace crd_cpp {
         ceres::Solve(m_options, &m_problem, &m_summary);
     }
 
-
-    void Polyfit::fit_poly_on_points() {
-        ceres::Solver::Options m_options;
-        ceres::Problem m_problem;
-        ceres::Solver::Summary m_summary;
-
-        m_options.max_num_iterations = 50;
-        m_options.function_tolerance = 1e-10;
-        m_options.parameter_tolerance = 1e-14;
-        m_options.linear_solver_type = ceres::DENSE_QR;
-        m_options.minimizer_progress_to_stdout = false;
-
-        int poly_idx;
-        ceres::CostFunction *cost_function;
-        std::default_random_engine generator;
-        std::normal_distribution<double> distribution(5.0, 5.1);
-        for (int row_num = 0; row_num < m_image_height; row_num++) {
-            for (poly_idx = -1; poly_idx < 2; poly_idx++) {
-                auto p = m_crop_row_points.at((size_t) (row_num * 3 + (1 + poly_idx)));
-                cost_function = PointResidual::Create(p.y + distribution(generator), p.x + distribution(generator),
-                                                      poly_idx);
-                m_problem.AddResidualBlock(cost_function, NULL, m_parameters);
-            }
-        }
-        ceres::Solve(m_options, &m_problem, &m_summary);
-    }
-
     void Polyfit::plot_fitted_polys(std::string suffix) {
-        std::cout << "[plotting]: " << suffix << std::endl;
+        // std::cout << "[plotting]: " << suffix << std::endl;
         cv::Mat img = m_drawable_image.clone();
         cv::Scalar_<double> color;
 
@@ -209,7 +165,7 @@ namespace crd_cpp {
         // cv::imshow("RGB plot_" + suffix, img);
 
         // cv::imshow("plot_" + suffix, img);
-        cv::imwrite(suffix + ".jpg", img);
+        cv::imwrite(suffix + "__" + std::to_string(std::time(NULL)) + ".jpg", img);
         // cv::imwrite("plot_" + suffix + ".jpg", m_spammable_img);
         // cv::waitKey(DISPLAY_FPS);
         // cv::destroyAllWindows();
@@ -219,18 +175,35 @@ namespace crd_cpp {
         return (int) eval_poly_double(image_row_num, poly_idx, params);
     }
     const double Polyfit::eval_poly_central(int image_row_num, int poly_idx, const double *params) {
-        const double x3 = pow(image_row_num, 3.0);
-        const double x2 = pow(image_row_num, 2.0);
-        const double x1 = pow(image_row_num, 1.0);
+        poly_idx = 0;
+        double poly_origin = params[0] + params[Polyfit::PERIOD_OFFSET] * poly_idx;
 
-        double column;
-        column = (
-                // degree change
-                // + params[4] * pow(image_row_num, 4)
-                + params[3] * x3
-                + params[2] * x2
-                + params[1] * x1
-                + params[0]
+        const double alpha1 = (params[Polyfit::PERSPECTIVE_OFFSET+1] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+0]);
+        const double alpha2 = (params[Polyfit::PERSPECTIVE_OFFSET+3] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+2]);
+        const double alpha3 = (params[Polyfit::PERSPECTIVE_OFFSET+5] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+4]);
+
+        const double column = (
+                + alpha3 * params[3] * (image_row_num * image_row_num * image_row_num)
+                + alpha2 * params[2] * (image_row_num * image_row_num)
+                + alpha1 * params[1] * (image_row_num)
+                +          params[0]
+                // + poly_idx * params[Polyfit::PERIOD_OFFSET]
+        );
+        return column;
+    }
+    const double Polyfit::eval_poly_double(int image_row_num, int poly_idx, const double *params) {
+        double poly_origin = params[0] + params[Polyfit::PERIOD_OFFSET] * poly_idx;
+
+        const double alpha1 = (params[Polyfit::PERSPECTIVE_OFFSET+1] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+0]);
+        const double alpha2 = (params[Polyfit::PERSPECTIVE_OFFSET+3] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+2]);
+        const double alpha3 = (params[Polyfit::PERSPECTIVE_OFFSET+5] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+4]);
+
+        const double column = (
+                + alpha3 * params[3] * (image_row_num * image_row_num * image_row_num)
+                + alpha2 * params[2] * (image_row_num * image_row_num)
+                + alpha1 * params[1] * (image_row_num)
+                +          params[0]
+                + poly_idx * params[Polyfit::PERIOD_OFFSET]
         );
         return column;
     }

@@ -18,9 +18,6 @@ int main(int argc, char **argv) {
 
     cv::Size image_size = cv::Size(400, 300);
 
-    std::cout << "loading" << std::endl;
-    // row_detector.pre_alloc(image_size);
-    std::cout << "loaded" << std::endl;
 
     crd_cpp::ImagePreprocessor preprocessor(image_size);
     std::cout << "preprocessor initd" << std::endl;
@@ -32,31 +29,37 @@ int main(int argc, char **argv) {
     // cpp image processing
     cv::Mat intensityImage = preprocessor.process(img);
 
-    /*
-    // templte matching for cpp
-    start = std::clock();
-    row_detector.template_matching(intensityImage);
-    std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+    std::vector<crd_cpp::old_tuple_type> min_energy_results;
+    if(std::strcmp(argv[2], "gt") == 0){
+        std::cout << "loading" << std::endl;
+        row_detector.pre_alloc(image_size);
+        std::cout << "loaded" << std::endl;
 
-    // optimization for cpp
-    start = std::clock();
-    std::cout << "optimization:" << std::endl;
-    auto min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map,
-                                                                row_detector.m_best_energy_by_row);
-    std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+        // templte matching for cpp
+        start = std::clock();
+        row_detector.template_matching(intensityImage);
+        std::cout << "template_matching time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+
+        // optimization for cpp
+        start = std::clock();
+        std::cout << "optimization:" << std::endl;
+        min_energy_results = row_detector.find_best_parameters(row_detector.m_energy_map, row_detector.m_best_energy_by_row);
+        std::cout << "best_param time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms" << std::endl;
+    }
 
     // show results for CPP
-    std::cout << "plotting" << std::endl;
+    // std::cout << "plotting" << std::endl;
     // dump cpp results
     // crd_cpp::dump_template_matching(min_energy_results, row_detector.m_image_width, "cpp");
 
+    /*
     cv::Mat out_image;
     cv::cvtColor(intensityImage, out_image, cv::COLOR_GRAY2BGR);
     // crd_cpp::plot_template_matching(intensityImage, min_energy_results, out_image);
      */
 
     std::cout << ">fitting initial guess" << std::endl;
-    crd_cpp::Polyfit polyfit(img, intensityImage, atoi(argv[2]), atoi(argv[3]), 1e-7);
+    crd_cpp::Polyfit polyfit(img, intensityImage, min_energy_results, atoi(argv[3]), atoi(argv[4]), 1e-5);
 
     // teardown cpp
     std::cout << "teardown" << std::endl;
