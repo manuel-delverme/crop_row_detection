@@ -71,8 +71,8 @@ namespace crd_cpp {
         cv::Mat m_original_image;
         cv::Mat m_drawable_image;
 
-        static const int eval_poly(int image_row_num, int poly_idx, const double *params);
-        static const double eval_poly_double(int image_row_num, int poly_idx, const double *params);
+        const int eval_poly(int image_row_num, int poly_idx, const double *params);
+        const double eval_poly_double(int image_row_num, int poly_idx, const double *params);
         const double eval_poly_central(int image_row_num, int poly_idx, const double *params);
 
         Polyfit(cv::Mat &intensity_map,
@@ -85,7 +85,6 @@ namespace crd_cpp {
 
         void add_noise();
         void test_noise(const int max_num_iterations, const int max_useless_iterations, clock_t start);
-        static double static_eval_poly_loss(const double* m_parameters, int batch_size, const bool only_central, const bool sub_pixel, cv::Mat image);
     };
 }
 

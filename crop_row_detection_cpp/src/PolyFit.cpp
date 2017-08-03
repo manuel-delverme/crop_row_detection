@@ -29,27 +29,6 @@ void print(T t, Args... args)
 }
 
 namespace crd_cpp {
-    class CropRowCostFunctor {
-    public:
-        bool operator()(const double *poly_params, double *residuals) const {
-            const bool only_central = false;
-            residuals[0] = Polyfit::static_eval_poly_loss(poly_params, row_num_, only_central, true, image_);
-            return true;
-        }
-
-        static ceres::CostFunction *Create(const cv::Mat image, const int row_num) {
-            return new ceres::NumericDiffCostFunction<CropRowCostFunctor, ceres::CENTRAL, 1, Polyfit::NR_POLY_PARAMETERS>(
-                    new CropRowCostFunctor(image, row_num));
-        }
-
-    private:
-        CropRowCostFunctor(const cv::Mat &image, const int row_num) :
-                image_(image), row_num_(row_num) {}
-
-        const cv::Mat image_;
-        const int row_num_;
-    };
-
     Polyfit::Polyfit(cv::Mat &out_img, cv::Mat intensity_map, std::vector<old_tuple_type> ground_truth, const int max_num_iterations,
                      const int max_useless_iterations, const double function_tolerance) {
 
@@ -63,9 +42,10 @@ namespace crd_cpp {
         ksize = cv::Size(5, 1);
         cv::GaussianBlur(intensity_map, m_gaussian_6_intensity_map, ksize, 0);
         ksize = cv::Size(9, 1);
-        cv::GaussianBlur(intensity_map, m_gaussian_9_intensity_map, ksize, 0);
+        cv::GaussianBlur(intensity_map, m_intensity_map, ksize, 0);
+        cv::GaussianBlur(out_img, out_img, ksize, 0);
+
         //cv::medianBlur(intensity_map, intensity_map, 5);
-        //m_intensity_map = intensity_map;
 
         m_drawable_image = out_img;
         m_original_image = out_img;
@@ -77,15 +57,15 @@ namespace crd_cpp {
         if(ground_truth.empty()){
             // for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) m_parameters[idx] = 0.0000125;
             // m_parameters[0] = 166.538;
-            m_parameters[1] = -0.201784;
-            m_parameters[2] = -0.00103746;
-            m_parameters[3] = 1.96107e-06;
-            m_parameters[4] = 0.00621423;
-            m_parameters[5] = -2.16231;
-            m_parameters[6] = 0.00720419;
-            m_parameters[7] = 1.44456;
-            m_parameters[8] = 0.00666877;
-            m_parameters[9] = 2.52987;
+            m_parameters[1] = -0.1; // 01784;
+            m_parameters[2] = -0.001; // 03746;
+            m_parameters[3] = 2e-6; // 1.96107e-06;
+            m_parameters[4] = 0.01; // 21423;
+            m_parameters[5] = -1.; // 16231;
+            m_parameters[6] = 0.01; // 20419;
+            m_parameters[7] = 1.0; // 4456;
+            m_parameters[8] = 0.01; // 66877;
+            m_parameters[9] = 2.5; // 2987;
 
             double sum_column[m_image_width];
             for (int idx = 0; idx < m_image_width; idx++) sum_column[idx] = 0;
@@ -182,8 +162,8 @@ namespace crd_cpp {
         //TODO: find better parameters
         learning_rate[0] = lr;
         learning_rate[1] = learning_rate[0] * lr;
-        learning_rate[2] = learning_rate[1] * lr;
-        learning_rate[3] = learning_rate[2] * lr;
+        learning_rate[2] = learning_rate[1] * lr * lr;
+        learning_rate[3] = learning_rate[2] * lr * lr;
         // learning_rate[4] = 0.001;
         learning_rate[PERSPECTIVE_OFFSET+0] = lr;
         learning_rate[PERSPECTIVE_OFFSET+1] = lr;
@@ -225,6 +205,15 @@ namespace crd_cpp {
         int batch_size = m_image_height;
 
         int iter_number;
+        if(locked[PERSPECTIVE_OFFSET]){
+            skip_lateral_rows = true;
+        } else {
+            skip_lateral_rows = false;
+        }
+        m_drawable_image = m_original_image;
+        plot_fitted_polys("fittings/initial" + std::to_string(iter_number));
+        m_original_image = m_drawable_image.clone();
+
         for (iter_number = 0; iter_number < max_num_iterations; iter_number++) {
 
             if(batch_size != m_image_height)
@@ -238,13 +227,10 @@ namespace crd_cpp {
             if(print_stuff) print("--------------------------", iter_number, "-------------------------------------------------");
             if(print_stuff) std::cout << std::endl;
             int next_idx;
+            new_loss = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
+
             for (int idx = 0; idx < NR_POLY_PARAMETERS; idx++) {
                 if(locked[idx]) continue;
-                if(locked[PERSPECTIVE_OFFSET]){
-                    skip_lateral_rows = true;
-                } else {
-                    skip_lateral_rows = false;
-                }
 
                 const double h = step_size[idx];
 
@@ -260,6 +246,7 @@ namespace crd_cpp {
                 // poly[idx] -= h;
 
                 jac_polynomial[idx] = ((fxh - fx) / h);
+                // H = transpose(jac_polynomial[idx]) * jac_polynomial[idx];
 
                 // const int hidx = (++history_idx[idx]);
                 // history_idx[idx] = hidx % 20;
@@ -362,46 +349,6 @@ namespace crd_cpp {
         double final_loss = eval_poly_loss(m_parameters, m_image_height, skip_lateral_rows, sub_pixel_accuracy);
         m_thread_losses[thread_idx] = final_loss;
         return final_loss;
-    }
-    double Polyfit::static_eval_poly_loss(const double* parameters, int row_num, const bool only_central,
-                                   const bool sub_pixel, cv::Mat m_intensity_map) {
-        const int batch_size = 300;
-        int poly_idx_min = -1;
-        int poly_idx_max = 1;
-        double cost = 0;
-        double intensity;
-        double column_positions[poly_idx_max - poly_idx_min];
-        int m_image_width = m_intensity_map.cols;
-        int m_image_height = m_intensity_map.rows;
-
-        for (int poly_idx = poly_idx_min; poly_idx <= poly_idx_max; poly_idx++) {
-            double column;
-            column = eval_poly_double(row_num, poly_idx, parameters);
-
-            // ------------------------------------------ NAN CHECK
-            if(poly_idx != poly_idx_min){
-                const double column_m1 = column_positions[poly_idx - poly_idx_min - 1];
-                if(std::abs(column_m1 - column) < 10)
-                    cost += 10;
-            }
-            if (column < 0 || column > m_image_width || column != column || (parameters[PERIOD_OFFSET] < m_image_width/5 && !only_central)) {
-                cost += 10;
-            } else {
-                const int left = (const int) floor(column);
-                const double f_left = ((int) m_intensity_map.at<uchar>(m_image_height - row_num, left));
-                if (sub_pixel) {
-                    const double f_right = ((int) m_intensity_map.at<uchar>(m_image_height - row_num, left + 1));
-                    intensity = f_left + (f_right - f_left) * (column - left);
-                } else {
-                    intensity = f_left;
-                }
-                cost += -intensity / 255;
-            }
-        }
-        cost /= batch_size * (poly_idx_max - poly_idx_min + 1); // normalize horizontally
-        cost *= (m_image_height / batch_size); // normalize vertically
-        return cost;
-
     }
     double Polyfit::eval_poly_loss(const double* parameters, int batch_size, const bool only_central,
                                    const bool sub_pixel) {

@@ -165,7 +165,7 @@ namespace crd_cpp {
         // cv::imshow("RGB plot_" + suffix, img);
 
         // cv::imshow("plot_" + suffix, img);
-        cv::imwrite(suffix + "__" + std::to_string(std::time(NULL)) + ".jpg", img);
+        cv::imwrite(suffix /*+ "__" + std::to_string(std::time(NULL)) +*/ + ".jpg", img);
         // cv::imwrite("plot_" + suffix + ".jpg", m_spammable_img);
         // cv::waitKey(DISPLAY_FPS);
         // cv::destroyAllWindows();
@@ -192,6 +192,7 @@ namespace crd_cpp {
         return column;
     }
     const double Polyfit::eval_poly_double(int image_row_num, int poly_idx, const double *params) {
+        image_row_num -= m_image_height/2;
         double poly_origin = params[0] + params[Polyfit::PERIOD_OFFSET] * poly_idx;
 
         const double alpha1 = (params[Polyfit::PERSPECTIVE_OFFSET+1] + poly_origin * params[Polyfit::PERSPECTIVE_OFFSET+0]);
